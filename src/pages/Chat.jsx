@@ -551,12 +551,12 @@ export default function Chat() {
                   flexDirection: 'column', overflow: 'hidden', minWidth: 0,
                 }}
             >
-              <div style={{ padding: 'var(--header-padding)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ padding: 'var(--header-padding)', borderBottom: '1px solid rgba(90, 120, 255,0.1)' }}>
                 <div style={{
-                  fontSize: 18, fontWeight: 800, letterSpacing: '-0.3px', marginBottom: 12,
+                  fontSize: 18, fontWeight: 800, letterSpacing: '-0.3px', marginBottom: 0,
                   display: 'flex', alignItems: 'center', gap: 8,
                 }} className="chat-header-title">
-                  <MessageCircle size={18} style={{ color: '#60A5FA' }} />
+                  <MessageCircle size={19} style={{ color: '#60A5FA' }} />
                   Чаты
                   {totalUnread > 0 && (
                       <span style={{
@@ -636,7 +636,7 @@ export default function Chat() {
                             {chat.lastMessage?.trim()
                                 ? (chat.lastMessage.length > 38 ? chat.lastMessage.slice(0, 38) + '...' : chat.lastMessage)
                                 : chat.lastMessageTime
-                                    ? <span style={{ opacity: 0.5 }}>📷 Фото</span>
+                                    ? <span style={{ opacity: 0.5 }}>🖼️ Фото</span>
                                     : <span style={{ opacity: 0.5 }}>Сообщений не было</span>
                             }
                           </span>
@@ -695,7 +695,7 @@ export default function Chat() {
                             style={{
                               fontSize: 15,
                               fontWeight: 700,
-                              paddingBottom: 8,
+                              paddingBottom: 0,
                               display: 'inline-block'
                             }}
                             className="chat-header-title"

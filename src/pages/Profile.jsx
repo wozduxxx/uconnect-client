@@ -276,7 +276,7 @@ export default function Profile() {
                           <Edit3 size={13} /> Написать
                         </Button>
                     ) : friendRequestSent ? (
-                        <Button variant="ghost" disabled style={{ padding: '8px 18px', fontSize: 13 }}>
+                        <Button variant="purple" disabled style={{ padding: '8px 18px', fontSize: 13 }}>
                           Заявка отправлена
                         </Button>
                     ) : (
