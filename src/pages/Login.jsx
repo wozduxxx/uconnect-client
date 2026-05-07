@@ -117,7 +117,6 @@ export default function Login() {
                 <Button
                     type="submit"  // 👈 Добавьте type="submit"
                     fullWidth
-                    onClick={handleLogin}
                     disabled={loading}
                     style={{ marginTop: 8, padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 >
