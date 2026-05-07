@@ -11,6 +11,7 @@ import Requests from './pages/Requests'
 import Chat from './pages/Chat'
 import Wall from './pages/Wall'
 import BgOrbs from './components/BgOrbs'
+import PrivacyPolicy from './pages/PrivacyPolicy'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -88,6 +89,9 @@ function AppRoutes() {
             } />
             <Route path="/wall" element={
               <ProtectedRoute><Wall /></ProtectedRoute>
+            } />
+            <Route path="/privacy" element={
+                <PrivacyPolicy />
             } />
 
             <Route path="*" element={<Navigate to="/" />} />

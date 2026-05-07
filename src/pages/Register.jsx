@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import {Link, useNavigate} from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Camera } from 'lucide-react'
 import Navbar from '../components/Navbar'
@@ -25,6 +25,7 @@ export default function Register() {
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false)
   const avatarRef = useRef()
 
   function set(k) {
@@ -52,6 +53,10 @@ export default function Register() {
     if (!form.password) { toast('Введите пароль'); return false }
     if (form.password.length < 6) { toast('Пароль должен быть не менее 6 символов'); return false }
     if (form.password !== form.confirm) { toast('Пароли не совпадают!'); return false }
+    if (!agreedToPrivacy) {
+      toast('Необходимо согласие с политикой конфиденциальности')
+      return false
+    }
     return true
   }
 
@@ -164,7 +169,34 @@ export default function Register() {
 
               <Input label="Пароль" type="password" placeholder="Придумайте пароль (мин. 6 символов)" value={form.password} onChange={set('password')} autoComplete="new-password" />
               <Input label="Повторите пароль" type="password" placeholder="Повторите пароль" value={form.confirm} onChange={set('confirm')} autoComplete="new-password" />
-
+              <div style={{ marginBottom: 24 }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}>
+                  <input
+                      type="checkbox"
+                      checked={agreedToPrivacy}
+                      onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                      style={{
+                        width: 18,
+                        height: 18,
+                        marginTop: 2,
+                        accentColor: '#60A5FA', // Цвет галочки
+                        cursor: 'pointer'
+                      }}
+                  />
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                      Я прочитал(а) и согласен(на) с
+                  <Link to="/privacy" style={{ color: '#60A5FA', fontWeight: 600, textDecoration: 'none' }}>
+                    {' '}Политикой конфиденциальности
+                  </Link>.
+          </span>
+                </label>
+              </div>
               <Button
                   type="submit"
                   fullWidth
