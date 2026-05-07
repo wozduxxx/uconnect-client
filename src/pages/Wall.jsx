@@ -476,7 +476,7 @@ export function ComposeBox({ currentUser, onPost }) {
             value={text}
             onChange={e => setText(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && handleSend()}
-            placeholder="Что у вас нового?..."
+            placeholder="Расскажите что-нибудь"
             rows={2}
             style={{
               width: '100%', padding: '10px 14px', borderRadius: 14,
