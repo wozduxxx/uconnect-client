@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --blue: #3B82F6;
+  --blue-dark: #1D4ED8;
+  --blue-light: #60A5FA;
+  --bg-deep: #060B18;
+  --bg-mid: #F0F4FF;
+  --bg-card: #111927;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(110, 110, 110, 0.075);
+  --text-primary: #262626;
+  --text-primary2: #F0F4FF;
+  --text-secondary: #5f6c92;
+  --text-muted: #3A4560;
+  --accent-green: #10B981;
+  --accent-pink: #EC4899;
+  --accent-yellow: #F59E0B;
+  --accent-purple: #8B5CF6;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: 'Manrope', sans-serif;
+  background: var(--bg-mid);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  overflow-y: scroll;
+  scrollbar-width: none;
+
+}
+
+body {
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: #888; /* Цвет ползунка */
+  border-radius: 10px;    /* Скругление углов */
+  border: 2px solid transparent; /* Отступ вокруг ползунка (если нужен) */
+}
+
+/* Glass utility */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+}
+
+/* OTP inputs */
+.otp-input {
+  width: 56px;
+  height: 64px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+  font-size: 26px;
+  font-weight: 700;
+  text-align: center;
+  font-family: 'Manrope', sans-serif;
+  outline: none;
+  transition: all 0.2s;
+}
+.otp-input:focus {
+  border-color: rgba(96, 165, 250, 0.6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* Input base */
+.field {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-family: 'Manrope', sans-serif;
+  outline: none;
+  transition: all 0.2s;
+}
+.field::placeholder { color: var(--text-muted); }
+.field:focus {
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(59, 130, 246, 0.06);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Float animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-14px); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
