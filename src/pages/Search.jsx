@@ -399,7 +399,7 @@ function PersonCard({ person, isFriend, isPending, onBidFriend }) {
                         </Button>
                     ) : isPending ? (
                         <Button variant="ghost" disabled style={{ padding: '9px 16px', fontSize: 13 }}>
-                            Отправлено ✓
+                            Отправлено
                         </Button>
                     ) : (
                         <Button onClick={() => onBidFriend(person.userId, fullName)} style={{ padding: '9px 16px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}>
