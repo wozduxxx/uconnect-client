@@ -9,12 +9,9 @@ import Profile from './pages/Profile'
 import Search from './pages/Search'
 import Requests from './pages/Requests'
 import Chat from './pages/Chat'
+import Wall from './pages/Wall'
 import BgOrbs from './components/BgOrbs'
 
-/**
- * Защищённый маршрут — редиректит на /login если не авторизован.
- * Пока идёт инициализация (проверка токена) — ничего не рендерим.
- */
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth()
 
@@ -27,8 +24,7 @@ function ProtectedRoute({ children }) {
           justifyContent: 'center',
         }}>
           <div style={{
-            width: 36,
-            height: 36,
+            width: 36, height: 36,
             border: '3px solid rgba(59,130,246,0.2)',
             borderTopColor: '#3B82F6',
             borderRadius: '50%',
@@ -46,9 +42,6 @@ function ProtectedRoute({ children }) {
   return children
 }
 
-/**
- * Маршрут только для неавторизованных — редиректит авторизованных на /search.
- */
 function PublicOnlyRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth()
 
@@ -92,6 +85,9 @@ function AppRoutes() {
             } />
             <Route path="/chat" element={
               <ProtectedRoute><Chat /></ProtectedRoute>
+            } />
+            <Route path="/wall" element={
+              <ProtectedRoute><Wall /></ProtectedRoute>
             } />
 
             <Route path="*" element={<Navigate to="/" />} />

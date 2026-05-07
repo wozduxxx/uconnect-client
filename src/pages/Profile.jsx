@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ChevronRight, MapPin, Users, Zap, Sparkles, Edit3, UserPlus, UserCheck, Loader2 } from 'lucide-react'
+import {ChevronRight, MapPin, Users, Zap, Sparkles, Edit3, UserPlus, UserCheck, Loader2, Globe, X} from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Tag from '../components/Tag'
 import Button from '../components/Button'
@@ -12,6 +12,9 @@ import { updateProfile, getUserById } from '../api/users'
 import { getMyFriends, getUserFriends, bidFriend, getSentRequests } from '../api/friends'
 import { getUserTags } from '../api/interests'
 import { resolveAvatarUrl, validateImageFile } from '../utils/fileUtils'
+// Импорт компонентов стенки и API
+import { WallPost, ComposeBox, PostSkeleton } from './Wall'
+import { getUserPosts, createWallPost, deleteWallPost } from '../api/wall'
 
 const TAG_COLORS = ['tag-blue', 'tag-purple', 'tag-green', 'tag-pink', 'tag-yellow', 'tag-teal']
 function getTagColor(name) {
@@ -24,6 +27,12 @@ export default function Profile() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user: currentUser, refreshProfile } = useAuth()
+
+  const [selectedImage, setSelectedImage] = useState(null)
+  const [scale, setScale] = useState(1)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
 
   // Состояния для своего профиля
   const [editOpen, setEditOpen] = useState(false)
@@ -42,6 +51,13 @@ export default function Profile() {
   const [profileLoading, setProfileLoading] = useState(true)
   const [isSmall, setIsSmall] = useState(false)
 
+  // ── Состояния для постов ──────────────────────────────────────────────
+  const [userPosts, setUserPosts] = useState([])
+  const [postsLoading, setPostsLoading] = useState(true)
+  const [postOffset, setPostOffset] = useState(0)
+  const [hasMorePosts, setHasMorePosts] = useState(true)
+  const POST_LIMIT = 10
+
   // Читаем ?id= из URL
   const searchParams = new URLSearchParams(location.search)
   const profileUserId = searchParams.get('id')
@@ -54,6 +70,7 @@ export default function Profile() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
+  // Загрузка профиля
   useEffect(() => {
     async function load() {
       setProfileLoading(true)
@@ -61,8 +78,6 @@ export default function Profile() {
         if (profileUserId && currentUser?.userId?.toString() !== profileUserId) {
           setViewingOtherProfile(true)
           const targetId = Number(profileUserId)
-
-          // Параллельная загрузка: профиль + друзья + теги + статус дружбы
           const [otherProfile, otherFriendsList, otherTagsList, myFriendsList, sentReqs] = await Promise.all([
             getUserById(targetId),
             getUserFriends(targetId),
@@ -75,14 +90,12 @@ export default function Profile() {
           setOtherFriends(otherFriendsList.map(f => f.friendInfo).filter(Boolean))
           setOtherTags(otherTagsList || [])
 
-          // Статус дружбы: проверяем среди своих друзей и отправленных заявок
           const isFriend = myFriendsList.some(f => f.friendInfo?.userId === targetId)
           const hasPending = sentReqs.some(r => r.user?.userId === targetId)
 
           setIsFriendWithOther(isFriend)
           setFriendRequestSent(hasPending)
-        }
-        else {
+        } else {
           setViewingOtherProfile(false)
           setOtherProfileData(null)
 
@@ -103,7 +116,6 @@ export default function Profile() {
       }
     }
 
-    // Загружаем только когда есть currentUser
     if (currentUser) {
       load()
     } else {
@@ -111,13 +123,36 @@ export default function Profile() {
     }
   }, [profileUserId, currentUser?.userId])
 
+  // ── Загрузка постов ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (profileLoading) return
+    const targetId = viewingOtherProfile ? profileUserId : currentUser?.userId
+    if (!targetId) return
+
+    async function loadPosts() {
+      setPostsLoading(true)
+      setPostOffset(0)
+      try {
+        const data = await getUserPosts(targetId, { offset: 0, limit: POST_LIMIT })
+        const list = Array.isArray(data) ? data : []
+        setUserPosts(list)
+        setPostOffset(list.length)
+        setHasMorePosts(list.length === POST_LIMIT)
+      } catch (err) {
+        console.error('Ошибка загрузки постов:', err)
+      } finally {
+        setPostsLoading(false)
+      }
+    }
+    loadPosts()
+  }, [profileUserId, currentUser?.userId, viewingOtherProfile, profileLoading])
+
   async function handleAddFriend() {
     if (!profileUserId) return
     setFriendRequestSent(true)
     try {
       const msg = await bidFriend(Number(profileUserId))
       toast(msg || 'Заявка отправлена')
-      // Если мгновенно стали друзьями (была обратная заявка)
       if (msg?.includes('друзья')) {
         setIsFriendWithOther(true)
         setFriendRequestSent(false)
@@ -132,36 +167,62 @@ export default function Profile() {
   async function handleSave(updated) {
     try {
       const fd = new FormData()
-
-      // Имя и фамилия
       if (updated.name) {
         const parts = updated.name.trim().split(' ')
         fd.append('UserName', parts[0] || '')
         fd.append('UserSurname', parts.slice(1).join(' ') || '')
       }
-
-      // Описание
       if (updated.bio) fd.append('UserDescription', updated.bio)
-
-      // Аватар
       if (updated.avatarFile) {
         const { valid, error } = validateImageFile(updated.avatarFile, 5)
         if (!valid) { toast(error); return }
         fd.append('UserAvatar', updated.avatarFile)
       }
-
       if (updated.bannerFile) {
         const { valid, error } = validateImageFile(updated.bannerFile, 5)
         if (!valid) { toast(error); return }
         fd.append('UserBaner', updated.bannerFile)
       }
-
       await updateProfile(fd)
       toast('Профиль обновлён')
       await refreshProfile()
     } catch (err) {
       const msg = err.response?.data || 'Ошибка обновления'
       toast(typeof msg === 'string' ? msg : 'Ошибка обновления')
+    }
+  }
+
+  // ── Хендлеры постов ─────────────────────────────────────────────────
+  async function handleCreatePost({ text, file }) {
+    const newPost = await createWallPost({ text, file })
+    const enriched = {
+      ...newPost,
+      user: { userId: currentUser.userId, userName: currentUser.userName, userSurname: currentUser.userSurname, avatarUrl: currentUser.avatarUrl },
+      createdAt: newPost.createdAt || new Date().toISOString(),
+      likesCount: 0, isLiked: false, commentsCount: 0,
+    }
+    setUserPosts(prev => [enriched, ...prev])
+    setPostOffset(prev => prev + 1)
+    toast('Опубликовано!')
+  }
+
+  async function handleDeletePost(postId) {
+    setUserPosts(prev => prev.filter(p => p.postId !== postId))
+    setPostOffset(prev => prev - 1)
+    try { await deleteWallPost(postId) } catch { /* fallback handled by UI */ }
+  }
+
+  async function loadMorePosts() {
+    const targetId = viewingOtherProfile ? profileUserId : currentUser?.userId
+    if (!targetId) return
+    try {
+      const data = await getUserPosts(targetId, { offset: postOffset, limit: POST_LIMIT })
+      const list = Array.isArray(data) ? data : []
+      setUserPosts(prev => [...prev, ...list])
+      setPostOffset(prev => prev + list.length)
+      setHasMorePosts(list.length === POST_LIMIT)
+    } catch (err) {
+      toast('Ошибка загрузки постов')
     }
   }
 
@@ -212,7 +273,6 @@ export default function Profile() {
         <Navbar showLinks />
         <Toast />
 
-        {/* EditProfileModal — рендерим ТОЛЬКО для своего профиля И ТОЛЬКО когда profile определён */}
         {!viewingOtherProfile && profile && (
             <EditProfileModal
                 open={editOpen}
@@ -247,7 +307,6 @@ export default function Profile() {
                 style={{ borderRadius: 24, padding: '0 28px 24px', marginTop: -60, position: 'relative', zIndex: 2, minWidth: 300 }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16 }}>
-                {/* Аватар */}
                 <motion.div
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -276,15 +335,15 @@ export default function Profile() {
                           <Edit3 size={13} /> Написать
                         </Button>
                     ) : friendRequestSent ? (
-                        <Button variant="purple" disabled style={{ padding: '8px 18px', fontSize: 13 }}>
-                          Заявка отправлена
-                        </Button>
+                        <Button variant="purple" disabled style={{ padding: '8px 18px', fontSize: 13 }} >
+                          {isSmall ? 'Отправлено' : 'Заявка отправлена'}
+                        </Button >
                     ) : (
                         <Button
                             onClick={handleAddFriend}
                             style={{ padding: '8px 18px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
                         >
-                          <UserPlus size={13} /> Добавить в друзья
+                          <UserPlus size={13} /> {isSmall ? 'Добавить' : 'Добавить в друзья'}
                         </Button>
                     )
                 ) : (
@@ -310,7 +369,6 @@ export default function Profile() {
                         <span style={{ opacity: 0.4 }}>·</span>
                       </>
                   )}
-
                 </div>
               </div>
 
@@ -370,14 +428,19 @@ export default function Profile() {
                           style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, color: '#60A5FA', cursor: 'pointer', fontWeight: 600 }}
                           className="hover:-translate-y-0.5 transition-all duration-200"
                       >
-                        Посмотреть всех <ChevronRight size={13} />
+                        Посмотреть заявки  <ChevronRight size={13} />
                       </div>
                   )}
                 </div>
 
                 {(viewingOtherProfile ? otherFriends : friends).length === 0 ? (
                     <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13, padding: '20px 0' }}>
-                      Пока нет друзей
+                      Пока нет друзей. {viewingOtherProfile ? '' : <span
+                        onClick={() => navigate('/interests')}
+                        style={{ color: '#60A5FA', cursor: 'pointer', fontWeight: 600 }}
+                    >
+                                                В поиск!
+                                            </span>}
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -445,30 +508,280 @@ export default function Profile() {
                                   onClick={() => navigate('/interests')}
                                   style={{ color: '#60A5FA', cursor: 'pointer', fontWeight: 600 }}
                               >
-                            Добавить
-                          </span>
+                                                    Добавить
+                                                </span>
                             </>
                         }
                       </div>
                   ) : (
                       !viewingOtherProfile && (
                           <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 5, marginLeft: 3 }}>
-                      <span
-                          onClick={() => navigate('/interests')}
-                          style={{ color: '#60A5FA', cursor: 'pointer', fontWeight: 600 }}
-                      >
-                        Изменить
-                      </span>
+                                            <span
+                                                onClick={() => navigate('/interests')}
+                                                style={{ color: '#60A5FA', cursor: 'pointer', fontWeight: 600 }}
+                                            >
+                                                Изменить
+                                            </span>
                           </div>
                       )
                   )}
                 </div>
               </motion.div>
             </div>
+
+            {/* ── СЕКЦИЯ ПОСТОВ (НОВОЕ) ────────────────────────────── */}
+
+              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, marginTop: 16, marginLeft: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Globe size={20} style={{ color: '#60A5FA' }} />
+                {viewingOtherProfile ? 'Публикации' : 'Мои публикации'}
+              </div>
+
+              {/* Compose Box (только для своего профиля) */}
+              {!viewingOtherProfile && currentUser && (
+                  <ComposeBox currentUser={currentUser} onPost={handleCreatePost} />
+              )}
+
+              {/* Состояния загрузки / пустоты / списка */}
+              {postsLoading ? (
+                  [1, 2].map(i => <PostSkeleton key={i} />)
+              ) : userPosts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
+                    {viewingOtherProfile ? 'У пользователя пока нет публикаций' : 'У вас пока нет публикаций. Напишите что-нибудь!'}
+                  </div>
+              ) : (
+                  <>
+                    {userPosts.map(post => (
+                        <WallPost
+                            key={post.postId}
+                            post={post}
+                            currentUserId={currentUser?.userId}
+                            currentUser={currentUser}
+                            onDelete={handleDeletePost}
+                            onImageClick={setSelectedImage}
+                        />
+                    ))}
+                    {hasMorePosts && (
+                        <button
+                            onClick={loadMorePosts}
+                            style={{
+                              width: '100%', padding: '10px', marginTop: 12,
+                              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                              borderRadius: 12, color: '#60A5FA', fontSize: 13, fontWeight: 600,
+                              cursor: 'pointer', transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,0.1)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                        >
+                          Загрузить ещё
+                        </button>
+                    )}
+                  </>
+              )}
+            {/* ── КОНЕЦ СЕКЦИИ ПОСТОВ ─────────────────────────────── */}
+            {selectedImage && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => { setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                    style={{
+                      position: 'fixed',
+                      inset: 0,
+                      background: 'rgba(0,0,0,0.77)',
+                      zIndex: 9999,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 20,
+                      cursor: scale > 1 ? 'grab' : 'zoom-out',
+                      overflow: 'hidden',
+                    }}
+                >
+                  {/* Кнопка закрытия ✨ добавлен drop-shadow для иконки */}
+                  <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                      style={{
+                        position: 'absolute',
+                        top: 20,
+                        right: 20,
+                        width: 44,
+                        height: 44,
+                        borderRadius: '50%',
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(0,0,0,0.2)', /* ✨ лёгкая рамка для структуры */
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10000,
+                        backdropFilter: 'blur(10px)',
+                        filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.9))', /* ✨ чёрная обводка */
+                      }}
+                  >
+                    <X size={24} />
+                  </button>
+
+                  {/* Кнопки управления zoom ✨ добавлены тени и рамка */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 30,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    display: 'flex',
+                    gap: 10,
+                    zIndex: 10000,
+                    background: 'rgba(255,255,255,0.1)',
+                    padding: '8px 12px',
+                    borderRadius: 999,
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(0,0,0,0.2)', /* ✨ рамка панели */
+                    filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.8))', /* ✨ обводка всей панели */
+                  }}>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setScale(s => Math.max(0.5, s - 0.25)) }}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: 'rgba(255,255,255,0.15)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 20,
+                          fontWeight: 700,
+                          textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка текста */
+                        }}
+                    >
+                      −
+                    </button>
+                    <span style={{
+                      color: '#fff',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      minWidth: 50,
+                      justifyContent: 'center',
+                      textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка процентов */
+                    }}>
+                {Math.round(scale * 100)}%
+            </span>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setScale(s => Math.min(5, s + 0.25)) }}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: 'rgba(255,255,255,0.15)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 20,
+                          fontWeight: 700,
+                          textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка текста */
+                        }}
+                    >
+                      +
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                        style={{
+                          padding: '0 12px',
+                          height: 36,
+                          borderRadius: 999,
+                          border: 'none',
+                          background: 'rgba(255,255,255,0.15)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка текста */
+                        }}
+                    >
+                      Сброс
+                    </button>
+                  </div>
+
+                  {/* Изображение с zoom и drag */}
+                  <motion.img
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      src={selectedImage}
+                      alt="Full size"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (scale <= 1) {
+                          setSelectedImage(null)
+                          setScale(1)
+                          setPosition({ x: 0, y: 0 })
+                        }
+                      }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation()
+                        setScale(s => s < 1 ? 1 : s + 0.5)
+                      }}
+                      onWheel={(e) => {
+                        e.stopPropagation()
+                        const delta = e.deltaY > 0 ? -0.1 : 0.1
+                        setScale(s => {
+                          const newScale = Math.max(0.5, Math.min(5, s + delta))
+                          return newScale
+                        })
+                      }}
+                      style={{
+                        maxWidth: '90vw',
+                        maxHeight: '90vh',
+                        objectFit: 'contain',
+                        borderRadius: 12,
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                        cursor: scale > 1 ? 'grab' : 'zoom-out',
+                        transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
+                        transition: scale === 1 ? 'transform 0.3s ease' : 'none',
+                        userSelect: 'none',
+                        touchAction: 'pan-x pan-y',
+                      }}
+                      onMouseDown={(e) => {
+                        if (scale <= 1) return
+                        setIsDragging(true)
+                        setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y })
+                        e.currentTarget.style.cursor = 'grabbing'
+                      }}
+                      onMouseMove={(e) => {
+                        if (!isDragging || scale <= 1) return
+                        e.preventDefault()
+                        setPosition({
+                          x: (e.clientX - dragStart.x) / scale,
+                          y: (e.clientY - dragStart.y) / scale,
+                        })
+                      }}
+                      onMouseUp={(e) => {
+                        setIsDragging(false)
+                        e.currentTarget.style.cursor = 'grab'
+                      }}
+                      onMouseLeave={() => setIsDragging(false)}
+                  />
+                </motion.div>
+            )}
           </div>
 
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+          <style>{`
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 480px) {
+    .wall-btn-label { display: none !important; }
+    .wall-hint { display: none !important; }
+  }
+`}</style>
         </div>
+
       </div>
   )
 }

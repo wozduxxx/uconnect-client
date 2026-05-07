@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Paperclip, X, MessageCircle, Search,
-  Image, ChevronLeft, Check, CheckCheck,
+  Image, ChevronLeft, Check, CheckCheck, Trash2,
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Toast, { toast } from '../components/Toast'
@@ -17,6 +17,18 @@ function formatTime(dateStr) {
   const d = new Date(dateStr)
   return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
+
+function getResponsiveScale(imgElement) {
+  const imgWidth = imgElement.naturalWidth || imgElement.width
+  const screenWidth = window.innerWidth
+  const occupancy = imgWidth / screenWidth
+
+  if (occupancy <= 0.3) return 1.15
+  if (occupancy >= 1.0) return 0.98
+  const t = (occupancy - 0.3) / (1.0 - 0.3)
+  return 1.15 - t * (1.15 - 0.98)
+}
+
 function formatChatDate(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr)
@@ -29,6 +41,7 @@ function formatChatDate(dateStr) {
   if (isYesterday) return 'Вчера'
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 }
+
 function formatDayLabel(dateStr) {
   if (!dateStr) return ''
   const d = new Date(dateStr)
@@ -41,6 +54,7 @@ function formatDayLabel(dateStr) {
   if (isYesterday) return 'Вчера'
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
 }
+
 function getInitials(userName, userSurname) {
   return [userName?.[0], userSurname?.[0]].filter(Boolean).join('').toUpperCase() || '?'
 }
@@ -69,9 +83,10 @@ function Avatar({ user, size = 44, onClick }) {
 }
 
 // ── Пузырь сообщения ──────────────────────────────────────────────────────
-function MessageBubble({ msg }) {
+function MessageBubble({ msg, onImageClick }) {
   const isMine = msg.isMine
   const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '')
+
   return (
       <motion.div
           initial={{ opacity: 0, y: 8, scale: 0.97 }}
@@ -93,7 +108,7 @@ function MessageBubble({ msg }) {
                 borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
                 background: isMine
                     ? 'linear-gradient(135deg,#3B82F6,#6366F1)'
-                    : 'rgba(255,255,255,0.08)',
+                    : 'rgba(255,255,255,0.67)',
                 border: isMine ? 'none' : '1px solid rgba(255,255,255,0.08)',
                 color: isMine ? '#fff' : 'var(--text-primary)',
                 fontSize: 14,
@@ -104,19 +119,31 @@ function MessageBubble({ msg }) {
                 {msg.messageText}
               </div>
           )}
+
           {msg.attachments?.map((att, i) => (
               <div key={i} style={{ marginTop: 4 }}>
                 <img
                     src={`${apiBase}${att.fileUrl}`}
                     alt="attachment"
+                    onClick={() => onImageClick?.(`${apiBase}${att.fileUrl}`)}
                     style={{
                       maxWidth: '100%', maxHeight: 240, borderRadius: 12,
                       objectFit: 'cover', display: 'block',
                       border: '1px solid rgba(255,255,255,0.1)',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s ease',
+                    }}
+                    onMouseEnter={e => {
+                      const scale = getResponsiveScale(e.currentTarget)
+                      e.currentTarget.style.transform = `scale(${scale.toFixed(3)})`
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = 'scale(1)'
                     }}
                 />
               </div>
           ))}
+
           <div style={{
             display: 'flex', alignItems: 'center', gap: 4,
             justifyContent: isMine ? 'flex-end' : 'flex-start',
@@ -199,6 +226,14 @@ function FilePreview({ files, onRemove }) {
 // ── Главный компонент Chat ────────────────────────────────────────────────
 export default function Chat() {
   const navigate = useNavigate()
+
+  // Стейты для модального просмотра изображений
+  const [selectedImage, setSelectedImage] = useState(null)
+  const [scale, setScale] = useState(1)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+
   const [chats, setChats] = useState([])
   const [chatsLoading, setChatsLoading] = useState(true)
   const [selectedChat, setSelectedChat] = useState(null)
@@ -215,23 +250,29 @@ export default function Chat() {
   const pollingRef = useRef(null)
   const textareaRef = useRef(null)
 
+  // Закрытие модалки по Escape
+  useEffect(() => {
+    function handleEsc(e) {
+      if (e.key === 'Escape' && selectedImage) {
+        setSelectedImage(null)
+        setScale(1)
+        setPosition({ x: 0, y: 0 })
+      }
+    }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [selectedImage])
+
   // ── Загрузка списка чатов ──────────────────────────────────────────────
   const loadChats = useCallback(async (silent = false) => {
     if (!silent) setChatsLoading(true)
     try {
-      // Параллельно загружаем чаты И всех друзей
       const [rawChats, allFriends] = await Promise.all([
         getMyChats(),
         getMyFriends()
       ])
-
-      // Обогащаем чаты данными пользователей
       const enrichedChats = await enrichChatsWithUserInfo(rawChats)
-
-      // Создаём Map для быстрого поиска чата по interlocutorId
       const chatMap = new Map(enrichedChats.map(c => [c.interlocutorId, c]))
-
-      // Для каждого друга, которого нет в чатах создаём пустой чат
       const friendsWithoutChats = allFriends
           .map(f => f.friendInfo)
           .filter(Boolean)
@@ -248,11 +289,7 @@ export default function Chat() {
               avatarUrl: friend.avatarUrl,
             }
           }))
-
-      // Объединяем: существующие чаты + друзья без чатов
       const allChats = [...enrichedChats, ...friendsWithoutChats]
-
-      // Сортируем: сначала с непрочитанными, потом по времени последнего сообщения
       allChats.sort((a, b) => {
         if (a.unreadCount && !b.unreadCount) return -1
         if (!a.unreadCount && b.unreadCount) return 1
@@ -261,7 +298,6 @@ export default function Chat() {
         if (!b.lastMessageTime) return -1
         return new Date(b.lastMessageTime) - new Date(a.lastMessageTime)
       })
-
       setChats(allChats)
     } catch (err) {
       if (!silent) {
@@ -324,7 +360,6 @@ export default function Chat() {
     if (!trimmed && !files.length) return
     if (!selectedChat) return
     setSending(true)
-
     const optimisticMsg = {
       messageId: Date.now(),
       senderId: -1,
@@ -337,7 +372,6 @@ export default function Chat() {
     setMessages(prev => [...prev, optimisticMsg])
     setText('')
     setFiles([])
-
     try {
       await sendMessage({
         receiverId: selectedChat.interlocutorId,
@@ -419,11 +453,9 @@ export default function Chat() {
           --input-padding: 12px 16px;
           --font-size-base: 14px;
           --touch-target: 44px;
-          --navbar-height: 62px;
+          --navbar-height: 48px;
         }
-        
         html, body { overflow: hidden; height: 100%; margin: 0; padding: 0; }
-        
         @media (max-width: 1024px) {
           :root {
             --chat-sidebar-width: 280px;
@@ -431,95 +463,78 @@ export default function Chat() {
             --avatar-size: 40px;
           }
         }
-        
         @media (max-width: 767px) {
-        :root {
-          --chat-sidebar-width: 100%;
-          --chat-padding: 8px;
-          --chat-gap: 8px;
-          --avatar-size: 36px;
-          --header-padding: 12px 16px;
-          --input-padding: 10px 12px;
-          --font-size-base: 13px;
-          --touch-target: 48px;
+          :root {
+            --chat-sidebar-width: 100%;
+            --chat-padding: 8px;
+            --chat-gap: 8px;
+            --avatar-size: 36px;
+            --header-padding: 12px 16px;
+            --input-padding: 10px 12px;
+            --font-size-base: 13px;
+            --touch-target: 48px;
+          }
+          .chat-window-panel:not(.active) { display: none !important; }
+          .chat-list-panel {
+            z-index: 100 !important;
+            position: fixed !important;
+            top: var(--navbar-height) !important;
+            left: 0 !important; right: 0 !important; bottom: 0 !important;
+            border-radius: 0 !important;
+            transform: translateX(0) !important;
+          }
+          .chat-window-panel {
+            z-index: 99 !important;
+            position: fixed !important;
+            top: var(--navbar-height) !important;
+            left: 0 !important; right: 0 !important; bottom: 0 !important;
+            border-radius: 0 !important;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            contain: layout style paint;
+          }
+          .chat-window-panel.active {
+            z-index: 101 !important;
+            transform: translateX(0) !important;
+            height: auto !important;
+            min-height: 0 !important;
+          }
+          .chat-window-panel.active > div:nth-child(2) {
+            flex: 1 !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch;
+          }
+          .chat-window-panel.active > div:last-child {
+            flex-shrink: 0 !important;
+            background: rgba(255,255,255,0.02) !important;
+            padding-bottom: calc(var(--input-padding) + env(safe-area-inset-bottom)) !important;
+            position: relative !important;
+            z-index: 10 !important;
+            bottom: auto !important;
+          }
+          .chat-grid { grid-template-columns: 1fr !important; }
+          .chat-window-panel.active ~ .chat-list-panel { display: none !important; }
+          .mobile-back-btn { display: flex !important; }
+          .message-bubble { padding-inline: 12px !important; }
+          .message-bubble[data-mine="true"] > div { max-width: 90% !important; }
+          .chat-search-input { font-size: 14px !important; padding: 10px 12px 10px 36px !important; }
+          .chat-window-panel textarea:focus { font-size: 16px !important; }
         }
-      
-        .chat-window-panel:not(.active) { display: none !important; }
-      
-        .chat-list-panel {
-          z-index: 100 !important;
-          position: fixed !important;
-          top: var(--navbar-height) !important;
-          left: 0 !important; right: 0 !important; bottom: 0 !important;
-          border-radius: 0 !important;
-          transform: translateX(0) !important;
-        }
-      
-        .chat-window-panel {
-          z-index: 99 !important;
-          position: fixed !important;
-          top: var(--navbar-height) !important;
-          left: 0 !important; right: 0 !important; bottom: 0 !important;
-          border-radius: 0 !important;
-          transform: translateX(100%);
-          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-          contain: layout style paint;
-        }
-      
-        .chat-window-panel.active {
-          z-index: 101 !important;
-          transform: translateX(0) !important;
-          /* ✅ ФИКС 1: Убрали жёсткую высоту. top и bottom сами растянут панель на нужный размер */
-          height: auto !important;
-          min-height: 0 !important;
-        }
-      
-        /* ✅ ФИКС 2: Убран лишний пробел в селекторе */
-        .chat-window-panel.active > div:nth-child(2) {
-          flex: 1 !important;
-          min-height: 0 !important;
-          overflow-y: auto !important;
-          -webkit-overflow-scrolling: touch;
-        }
-      
-        /* ✅ ФИКС 3: Убран sticky, который ломался на мобильных. Flex-shrink: 0 надёжнее */
-        .chat-window-panel.active > div:last-child {
-          flex-shrink: 0 !important;
-          background: rgba(255,255,255,0.02) !important;
-          padding-bottom: calc(var(--input-padding) + env(safe-area-inset-bottom)) !important;
-          position: relative !important;
-          z-index: 10 !important;
-          bottom: auto !important;
-        }
-      
-        .chat-grid { grid-template-columns: 1fr !important; }
-        .chat-window-panel.active ~ .chat-list-panel { display: none !important; }
-        .mobile-back-btn { display: flex !important; }
-        .message-bubble { padding-inline: 12px !important; }
-        .message-bubble[data-mine="true"] > div { max-width: 90% !important; }
-        .chat-search-input { font-size: 14px !important; padding: 10px 12px 10px 36px !important; }
-      
-        /* Предотвращаем зум на iOS при фокусе на textarea */
-        .chat-window-panel textarea:focus { font-size: 16px !important; }
-      }
-        
         @media (max-width: 360px) {
           :root { --font-size-base: 12px; --touch-target: 44px; }
           .chat-header-title { font-size: 14px !important; }
           .chat-item-name { font-size: 13px !important; }
           .chat-item-preview { font-size: 11px !important; }
         }
-        
         @media (hover: none) and (pointer: coarse) {
           .chat-item, .send-btn, .attach-btn, .mobile-back-btn {
             min-height: var(--touch-target); min-width: var(--touch-target);
           }
           textarea { font-size: 16px !important; }
         }
-
         .chat-empty-state { display: none; }
         @media (min-width: 768px) { .chat-empty-state { display: flex; } }
-        
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
@@ -673,10 +688,10 @@ export default function Chat() {
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: 12,
                       padding: 'var(--header-padding)',
-
                       borderBottom: '1px solid rgba(90, 120, 255,0.1)',
                       background: 'rgba(255,255,255,0.02)',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      height: 65
                     }}>
                       <button
                           onClick={() => { setMobileShowChat(false); setSelectedChat(null) }}
@@ -740,7 +755,11 @@ export default function Chat() {
                             {groupMessagesByDate(messages).map(item =>
                                 item.type === 'divider'
                                     ? <DateDivider key={item.key} label={item.label} />
-                                    : <MessageBubble key={item.key} msg={item.msg} />
+                                    : <MessageBubble
+                                        key={item.key}
+                                        msg={item.msg}
+                                        onImageClick={setSelectedImage}
+                                    />
                             )}
                             <div ref={messagesEndRef} />
                           </>
@@ -873,6 +892,202 @@ export default function Chat() {
               )}
             </motion.div>
           </div>
+
+          {/* ══ МОДАЛЬНОЕ ОКНО ДЛЯ ПРОСМОТРА ИЗОБРАЖЕНИЙ ═══════════════════ */}
+          <AnimatePresence>
+            {selectedImage && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => { setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                    style={{
+                      position: 'fixed',
+                      inset: 0,
+                      background: 'rgba(0,0,0,0.77)',
+                      zIndex: 9999,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 20,
+                      cursor: scale > 1 ? 'grab' : 'zoom-out',
+                      overflow: 'hidden',
+                    }}
+                >
+                  {/* Кнопка закрытия ✨ добавлен drop-shadow для иконки */}
+                  <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                      style={{
+                        position: 'absolute',
+                        top: 20,
+                        right: 20,
+                        width: 44,
+                        height: 44,
+                        borderRadius: '50%',
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(0,0,0,0.2)', /* ✨ лёгкая рамка для структуры */
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10000,
+                        backdropFilter: 'blur(10px)',
+                        filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.9))', /* ✨ чёрная обводка */
+                      }}
+                  >
+                    <X size={24} />
+                  </button>
+
+                  {/* Кнопки управления zoom ✨ добавлены тени и рамка */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 30,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    display: 'flex',
+                    gap: 10,
+                    zIndex: 10000,
+                    background: 'rgba(255,255,255,0.1)',
+                    padding: '8px 12px',
+                    borderRadius: 999,
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid rgba(0,0,0,0.2)', /* ✨ рамка панели */
+                    filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.8))', /* ✨ обводка всей панели */
+                  }}>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setScale(s => Math.max(0.5, s - 0.25)) }}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: 'rgba(255,255,255,0.15)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 20,
+                          fontWeight: 700,
+                          textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка текста */
+                        }}
+                    >
+                      −
+                    </button>
+                    <span style={{
+                      color: '#fff',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      minWidth: 50,
+                      justifyContent: 'center',
+                      textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка процентов */
+                    }}>
+                {Math.round(scale * 100)}%
+            </span>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setScale(s => Math.min(5, s + 0.25)) }}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: '50%',
+                          border: 'none',
+                          background: 'rgba(255,255,255,0.15)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 20,
+                          fontWeight: 700,
+                          textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка текста */
+                        }}
+                    >
+                      +
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                        style={{
+                          padding: '0 12px',
+                          height: 36,
+                          borderRadius: 999,
+                          border: 'none',
+                          background: 'rgba(255,255,255,0.15)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка текста */
+                        }}
+                    >
+                      Сброс
+                    </button>
+                  </div>
+
+                  {/* Изображение с zoom и drag */}
+                  <motion.img
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      src={selectedImage}
+                      alt="Full size"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (scale <= 1) {
+                          setSelectedImage(null)
+                          setScale(1)
+                          setPosition({ x: 0, y: 0 })
+                        }
+                      }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation()
+                        setScale(s => s < 1 ? 1 : s + 0.5)
+                      }}
+                      onWheel={(e) => {
+                        e.stopPropagation()
+                        const delta = e.deltaY > 0 ? -0.1 : 0.1
+                        setScale(s => {
+                          const newScale = Math.max(0.5, Math.min(5, s + delta))
+                          return newScale
+                        })
+                      }}
+                      style={{
+                        maxWidth: '90vw',
+                        maxHeight: '90vh',
+                        objectFit: 'contain',
+                        borderRadius: 12,
+                        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                        cursor: scale > 1 ? 'grab' : 'zoom-out',
+                        transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
+                        transition: scale === 1 ? 'transform 0.3s ease' : 'none',
+                        userSelect: 'none',
+                        touchAction: 'pan-x pan-y',
+                      }}
+                      onMouseDown={(e) => {
+                        if (scale <= 1) return
+                        setIsDragging(true)
+                        setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y })
+                        e.currentTarget.style.cursor = 'grabbing'
+                      }}
+                      onMouseMove={(e) => {
+                        if (!isDragging || scale <= 1) return
+                        e.preventDefault()
+                        setPosition({
+                          x: (e.clientX - dragStart.x) / scale,
+                          y: (e.clientY - dragStart.y) / scale,
+                        })
+                      }}
+                      onMouseUp={(e) => {
+                        setIsDragging(false)
+                        e.currentTarget.style.cursor = 'grab'
+                      }}
+                      onMouseLeave={() => setIsDragging(false)}
+                  />
+                </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </>
   )

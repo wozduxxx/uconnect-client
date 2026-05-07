@@ -11,7 +11,6 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
     const [menuOpen, setMenuOpen] = useState(false)
     const [isMobile, setIsMobile] = useState(false)
 
-    // Отслеживание ширины экрана
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth <= 767)
         check()
@@ -28,18 +27,14 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
     const closeMenu = () => setMenuOpen(false)
     const openMenu = () => setMenuOpen(true)
 
-    const initials = user
-        ? [user.userName?.[0], user.userSurname?.[0]].filter(Boolean).join('').toUpperCase()
-        : '?'
-
     const navItems = [
         { label: 'Поиск', path: '/search' },
-        { label: 'Мои коннекты', path: '/requests' },
+        { label: 'Стенка', path: '/wall' },
+        { label: 'Коннекты', path: '/requests' },
         { label: 'Чаты', path: '/chat', hasBadge: unreadMessages > 0 },
-        { label: 'Профиль', path: '/profile'},
+        { label: 'Профиль', path: '/profile' },
     ]
 
-    // Общие стили кнопок навигации
     const getLinkStyle = (isActive) => ({
         color: isActive ? '#4199ff' : 'var(--text-secondary)',
         border: 'none',
@@ -52,9 +47,14 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
         position: 'relative',
     })
 
-    // Рендер списка ссылок (используется и в десктопе, и в мобильном меню)
     const renderLinks = (mobile = false) => (
-        <div style={{ display: 'flex', flexDirection: mobile ? 'column' : 'row', gap: mobile ? 6 : 2, alignItems: mobile ? 'stretch' : 'center', width: '100%' }}>
+        <div style={{
+            display: 'flex',
+            flexDirection: mobile ? 'column' : 'row',
+            gap: mobile ? 6 : 2,
+            alignItems: mobile ? 'stretch' : 'center',
+            width: '100%',
+        }}>
             {navItems.map(item => {
                 const isActive = pathname === item.path
                 return (
@@ -63,15 +63,20 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
                         onClick={() => { navigate(item.path); mobile && closeMenu() }}
                         className="transition-all duration-200 hover:-translate-y-0.5"
                         style={{
-                            ...getLinkStyle(isActive, item.isProfile),
-                            ...(mobile && { padding: '14px 16px', width: '100%', justifyContent: 'space-between', borderRadius: '12px' })
+                            ...getLinkStyle(isActive),
+                            ...(mobile && {
+                                padding: '14px 16px',
+                                width: '100%',
+                                justifyContent: 'space-between',
+                                borderRadius: '12px',
+                            }),
                         }}
                     >
                         <span>{item.label}</span>
                         {item.hasBadge && (
                             <span style={{
                                 width: 8, height: 8, borderRadius: '50%', background: '#3B82F6',
-                                ...(mobile ? {} : { position: 'absolute', top: 2, right: 2, border: '2px solid var(--bg-mid)' })
+                                ...(mobile ? {} : { position: 'absolute', top: 2, right: 2, border: '2px solid var(--bg-mid)' }),
                             }} />
                         )}
                     </button>
@@ -80,13 +85,18 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
             <button
                 onClick={() => { handleLogout(); mobile && closeMenu() }}
                 style={{
-                    ...getLinkStyle(false, false),
+                    ...getLinkStyle(false),
                     color: '#ff6363',
-                    paddingLeft: 16 ,
-                    ...(mobile && { marginTop: 12, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 14, borderRadius: '12px' })
+                    paddingLeft: 16,
+                    ...(mobile && {
+                        marginTop: 12,
+                        borderTop: '1px solid rgba(0,0,0,0.06)',
+                        paddingTop: 14,
+                        borderRadius: '12px',
+                    }),
                 }}
             >
-                Выйти
+                Выход
             </button>
         </div>
     )
@@ -96,12 +106,14 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
             <nav
                 className="sticky top-0 z-50 flex items-center justify-between py-3"
                 style={{
-                    background: 'linear-gradient(135deg,rgba(110, 110, 255, 0.05),rgba(167, 139, 250, 0.1))',
+                    background: 'linear-gradient(135deg,rgba(110,110,255,0.05),rgba(167,139,250,0.1))',
                     backdropFilter: 'blur(20px)',
                     WebkitBackdropFilter: 'blur(20px)',
-                    borderBottom: '1px solid rgba(90, 120, 255,0.1)',
+                    borderBottom: '1px solid rgba(90,120,255,0.1)',
                     paddingLeft: isMobile ? '1.25rem' : '2.5rem',
                     paddingRight: isMobile ? '1.25rem' : '2.5rem',
+                    paddingTop: isMobile ? '0.25rem' : '0.75rem',
+                    paddingBottom: isMobile ? '0.25rem' : '0.75rem'
                 }}
             >
         <span
@@ -131,10 +143,9 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
                 )}
             </nav>
 
-            {/* Мобильное меню (стиль FilterPanel) */}
+            {/* Мобильное меню */}
             {isMobile && showLinks && (
                 <>
-                    {/* Overlay */}
                     <div
                         onClick={closeMenu}
                         style={{
@@ -143,8 +154,6 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
                             transition: 'opacity 0.3s ease',
                         }}
                     />
-
-                    {/* Slide-in Panel */}
                     <div
                         style={{
                             position: 'fixed', top: 0, right: 0,
@@ -172,7 +181,6 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
                                 <X size={16} />
                             </button>
                         </div>
-
                         {renderLinks(true)}
                     </div>
                 </>

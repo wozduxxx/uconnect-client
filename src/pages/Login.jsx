@@ -94,33 +94,37 @@ export default function Login() {
                 Войдите в свой аккаунт
               </div>
 
-              <Input
-                label="Email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-              />
-              <Input
-                label="Пароль"
-                type="password"
-                placeholder="Введите пароль"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-              />
+              <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
+                <Input
+                    label="Email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                />
+                <Input
+                    label="Пароль"
+                    type="password"
+                    placeholder="Введите пароль"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleLogin()}
+                    autoComplete="current-password"
+                />
 
-              {/* API INTEGRATION: Enter для отправки */}
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-              <Button
-                fullWidth
-                onClick={handleLogin}
-                disabled={loading}
-                style={{ marginTop: 8, padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-              >
-                {loading && <span style={spinnerStyle} />}
-                {loading ? 'Проверка...' : 'Войти'}
-              </Button>
+                <Button
+                    type="submit"  // 👈 Добавьте type="submit"
+                    fullWidth
+                    onClick={handleLogin}
+                    disabled={loading}
+                    style={{ marginTop: 8, padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                >
+                  {loading && <span style={spinnerStyle} />}
+                  {loading ? 'Проверка...' : 'Войти'}
+                </Button>
+              </form>
 
               <div style={{ textAlign: 'center', marginTop: 14, fontSize: 14, color: 'var(--text-secondary)' }}>
                 Нет аккаунта?{' '}

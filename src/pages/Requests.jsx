@@ -171,11 +171,18 @@ export default function Requests() {
                         </div>
 
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 15, fontWeight: 700, overflowWrap:' break-word' }}>{name}</div>
+                          <div style={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            minWidth: 0,
+                            overflowWrap: 'break-word'}}>
+                            {name}
+                          </div>
+
                           {req.createAt && (
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                              {new Date(req.createAt).toLocaleDateString('ru-RU')}
-                            </div>
+                              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                                {new Date(req.createAt).toLocaleDateString('ru-RU')}
+                              </div>
                           )}
                         </div>
 
@@ -280,8 +287,17 @@ export default function Requests() {
                             : initials
                           }
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 15, fontWeight: 700, overflowWrap:' break-word' }}>{name}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            minWidth: 0,
+                            wordBreak: 'break-word',
+                            overflowWrap: 'anywhere',
+                            whiteSpace: 'normal'
+                          }}>
+                            {name}
+                          </div>
                         </div>
                         <div onClick={() => navigate(`/chat`)} style={{
                           padding: '5px 12px', borderRadius: 999,
