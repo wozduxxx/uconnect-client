@@ -543,7 +543,7 @@ export default function Profile() {
                 {(viewingOtherProfile ? otherFriends : friends).length === 0 ? (
                     <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13, padding: '20px 0' }}>
                       Пока нет друзей. {viewingOtherProfile ? '' : <span
-                        onClick={() => navigate('/interests')}
+                        onClick={() => navigate('/search')}
                         style={{ color: '#60A5FA', cursor: 'pointer', fontWeight: 600 }}
                     >
                                                 В поиск!
