@@ -3,6 +3,6 @@
 
 npm install
 
-npm build
+npm run build
 
-npm preview
+npm run preview
