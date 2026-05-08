@@ -16,7 +16,9 @@ export async function rejectFriendRequest(friendId) {
 }
 
 export async function getMyRequests() {
-  const res = await api.get('/friend_request/GetMyRequests')
+  const res = await api.get('/friend_request/GetMyRequests', {
+    _isAuthRequest: true
+  })
   return res.data
 }
 

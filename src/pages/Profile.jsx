@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {ChevronRight, MapPin, Users, Zap, Sparkles, Edit3, UserPlus, UserCheck, Loader2, Globe, X} from 'lucide-react'
@@ -51,7 +51,7 @@ export default function Profile() {
   const [profileLoading, setProfileLoading] = useState(true)
   const [isSmall, setIsSmall] = useState(false)
 
-  // ── Состояния для постов ──────────────────────────────────────────────
+
   const [userPosts, setUserPosts] = useState([])
   const [postsLoading, setPostsLoading] = useState(true)
   const [postOffset, setPostOffset] = useState(0)
@@ -62,6 +62,9 @@ export default function Profile() {
   const searchParams = new URLSearchParams(location.search)
   const profileUserId = searchParams.get('id')
 
+  const imgRef = useRef(null)
+  const touchStateRef = useRef({ lastDist: 0, lastScale: 1, lastPos: { x: 0, y: 0 }, touches: [] })
+
   // Адаптивность
   useEffect(() => {
     const check = () => setIsSmall(window.innerWidth <= 400)
@@ -69,6 +72,101 @@ export default function Profile() {
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  useEffect(() => {
+    if (!selectedImage) return
+
+    const preventPageZoom = (e) => {
+      if (e.touches.length > 1) e.preventDefault()
+    }
+    document.addEventListener('touchmove', preventPageZoom, { passive: false })
+
+    const el = imgRef.current
+    if (!el) {
+      return () => document.removeEventListener('touchmove', preventPageZoom)
+    }
+
+    function getDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX
+      const dy = touches[0].clientY - touches[1].clientY
+      return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    function onTouchStart(e) {
+      e.stopPropagation()
+      const ts = touchStateRef.current
+      if (e.touches.length === 2) {
+        ts.lastDist = getDistance(e.touches)
+        ts.lastScaleOnStart = ts.currentScale ?? 1
+        ts.lastPosOnStart = ts.currentPos ? { ...ts.currentPos } : { x: 0, y: 0 }
+      } else if (e.touches.length === 1) {
+        ts.dragStart = {
+          x: e.touches[0].clientX - (ts.currentPos?.x ?? 0),
+          y: e.touches[0].clientY - (ts.currentPos?.y ?? 0),
+        }
+      }
+    }
+
+    function onTouchMove(e) {
+      e.preventDefault()
+      e.stopPropagation()
+      const ts = touchStateRef.current
+
+      if (e.touches.length === 2) {
+        const dist = getDistance(e.touches)
+        const ratio = dist / (ts.lastDist || dist)
+        const newScale = Math.max(0.5, Math.min(5, (ts.lastScaleOnStart ?? 1) * ratio))
+        ts.currentScale = newScale
+        setScale(newScale)
+      } else if (e.touches.length === 1) {
+        const curScale = ts.currentScale ?? 1
+        if (curScale <= 1) return
+        const newPos = {
+          x: e.touches[0].clientX - (ts.dragStart?.x ?? 0),
+          y: e.touches[0].clientY - (ts.dragStart?.y ?? 0),
+        }
+        ts.currentPos = newPos
+        setPosition(newPos)
+      }
+    }
+
+    function onTouchEnd(e) {
+      const ts = touchStateRef.current
+      const now = Date.now()
+      if (e.touches.length === 0 && e.changedTouches.length === 1) {
+        if (ts.lastTap && now - ts.lastTap < 300) {
+          const nextScale = (ts.currentScale ?? 1) > 1 ? 1 : 2.5
+          ts.currentScale = nextScale
+          ts.currentPos = { x: 0, y: 0 }
+          setScale(nextScale)
+          setPosition({ x: 0, y: 0 })
+          ts.lastTap = 0
+        } else {
+          ts.lastTap = now
+        }
+      }
+      if (e.touches.length === 0) {
+        ts.lastScaleOnStart = ts.currentScale ?? 1
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+
+    return () => {
+      document.removeEventListener('touchmove', preventPageZoom)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [selectedImage])
+
+// Синхронизируем touchStateRef с актуальным scale/position
+  useEffect(() => {
+    touchStateRef.current.currentScale = scale
+    touchStateRef.current.currentPos = position
+  }, [scale, position])
 
   // Загрузка профиля
   useEffect(() => {
@@ -123,7 +221,7 @@ export default function Profile() {
     }
   }, [profileUserId, currentUser?.userId])
 
-  // ── Загрузка постов ──────────────────────────────────────────────────
+
   useEffect(() => {
     if (profileLoading) return
     const targetId = viewingOtherProfile ? profileUserId : currentUser?.userId
@@ -192,7 +290,7 @@ export default function Profile() {
     }
   }
 
-  // ── Хендлеры постов ─────────────────────────────────────────────────
+
   async function handleCreatePost({ text, file }) {
     const newPost = await createWallPost({ text, file })
     const enriched = {
@@ -270,7 +368,7 @@ export default function Profile() {
 
   return (
       <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
-        <Navbar showLinks />
+        <Navbar />
         <Toast />
 
         {!viewingOtherProfile && profile && (
@@ -305,6 +403,7 @@ export default function Profile() {
                 animate={{ opacity: 1, y: 0 }}
                 className="glass"
                 style={{ borderRadius: 24, padding: '0 28px 24px', marginTop: -60, position: 'relative', zIndex: 2, minWidth: 300 }}
+
             >
               <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16 }}>
                 <motion.div
@@ -321,6 +420,14 @@ export default function Profile() {
                       marginTop: -48, flexShrink: 0,
                       boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                       overflow: 'hidden',
+                      cursor: activeProfile.avatarIsImage ? 'pointer' : 'default',
+                      transition: 'transform 0.2s',
+                    }}
+                    whileHover={activeProfile.avatarIsImage ? { scale: 1.05 } : {}}
+                    onClick={() => {
+                      if (activeProfile.avatarIsImage) {
+                        setSelectedImage(activeProfile.avatarUrl)
+                      }
                     }}
                 >
                   {activeProfile.avatarIsImage
@@ -529,7 +636,6 @@ export default function Profile() {
               </motion.div>
             </div>
 
-            {/* ── СЕКЦИЯ ПОСТОВ (НОВОЕ) ────────────────────────────── */}
 
               <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, marginTop: 16, marginLeft: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Globe size={20} style={{ color: '#60A5FA' }} />
@@ -577,13 +683,15 @@ export default function Profile() {
                     )}
                   </>
               )}
-            {/* ── КОНЕЦ СЕКЦИИ ПОСТОВ ─────────────────────────────── */}
             {selectedImage && (
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    onClick={() => { setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                    onClick={() => {
+                      setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
+                      touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
+                    }}
                     style={{
                       position: 'fixed',
                       inset: 0,
@@ -599,7 +707,10 @@ export default function Profile() {
                 >
                   {/* Кнопка закрытия ✨ добавлен drop-shadow для иконки */}
                   <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                      onClick={(e) => {
+                        e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
+                        touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
+                      }}
                       style={{
                         position: 'absolute',
                         top: 20,
@@ -711,6 +822,7 @@ export default function Profile() {
 
                   {/* Изображение с zoom и drag */}
                   <motion.img
+                      ref={imgRef}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
@@ -722,19 +834,18 @@ export default function Profile() {
                           setSelectedImage(null)
                           setScale(1)
                           setPosition({ x: 0, y: 0 })
+                          touchStateRef.current = { lastDist: 0, lastScale: 1, lastPos: { x: 0, y: 0 }, touches: [] }
                         }
                       }}
                       onDoubleClick={(e) => {
                         e.stopPropagation()
-                        setScale(s => s < 1 ? 1 : s + 0.5)
+                        setScale(s => s > 1 ? 1 : 2.5)
+                        setPosition({ x: 0, y: 0 })
                       }}
                       onWheel={(e) => {
                         e.stopPropagation()
-                        const delta = e.deltaY > 0 ? -0.1 : 0.1
-                        setScale(s => {
-                          const newScale = Math.max(0.5, Math.min(5, s + delta))
-                          return newScale
-                        })
+                        const delta = e.deltaY > 0 ? -0.15 : 0.15
+                        setScale(s => Math.max(0.5, Math.min(5, s + delta)))
                       }}
                       style={{
                         maxWidth: '90vw',
@@ -744,9 +855,10 @@ export default function Profile() {
                         boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
                         cursor: scale > 1 ? 'grab' : 'zoom-out',
                         transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
-                        transition: scale === 1 ? 'transform 0.3s ease' : 'none',
+                        transition: isDragging ? 'none' : scale === 1 ? 'transform 0.3s ease' : 'none',
                         userSelect: 'none',
-                        touchAction: 'pan-x pan-y',
+                        touchAction: 'none',
+                        WebkitUserSelect: 'none',
                       }}
                       onMouseDown={(e) => {
                         if (scale <= 1) return
@@ -758,13 +870,13 @@ export default function Profile() {
                         if (!isDragging || scale <= 1) return
                         e.preventDefault()
                         setPosition({
-                          x: (e.clientX - dragStart.x) / scale,
-                          y: (e.clientY - dragStart.y) / scale,
+                          x: (e.clientX - dragStart.x),
+                          y: (e.clientY - dragStart.y),
                         })
                       }}
                       onMouseUp={(e) => {
                         setIsDragging(false)
-                        e.currentTarget.style.cursor = 'grab'
+                        e.currentTarget.style.cursor = scale > 1 ? 'grab' : 'zoom-out'
                       }}
                       onMouseLeave={() => setIsDragging(false)}
                   />

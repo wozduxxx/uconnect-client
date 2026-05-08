@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // Базовый URL
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+const BASE_URL = (import.meta.env.VITE_API_URL || 'http://api.уконнект.рф/api')
 
 // токен
 let _token = localStorage.getItem('token') || null
@@ -34,7 +34,7 @@ const api = axios.create({
     timeout: 15000,
 })
 
-// ── Interceptor запросов: добавляем JWT-токен из памяти ───────────────────
+
 api.interceptors.request.use(
     config => {
         if (_token) {
@@ -45,19 +45,19 @@ api.interceptors.request.use(
     error => Promise.reject(error)
 )
 
-// ── Interceptor ответов: перехват 401 ─────────────────────────────────────
+
 api.interceptors.response.use(
     response => response,
     error => {
         const is401 = error.response?.status === 401
+        const isPublicRequest = error.config?._isPublicRequest === true
         const isAuthRequest =
             error.config?._isAuthRequest === true ||
             error.config?.url?.includes('loginUser') ||
             error.config?.url?.includes('IdentityVerification') ||
             error.config?.url?.includes('registerUser')
 
-        if (is401 && !isAuthRequest) {
-            // Настоящая протухшая сессия — чистим и редиректим
+        if (is401 && !isAuthRequest && !isPublicRequest) {
             setAuthToken(null)
             import('../components/Toast').then(({ toast }) => {
                 toast('Сессия истекла. Пожалуйста, войдите снова.')

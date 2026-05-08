@@ -14,13 +14,10 @@ import {
 import { resolveAvatarUrl, validateImageFile } from '../utils/fileUtils'
 import { useNavigate } from 'react-router-dom'
 
-// ── Утилиты ───────────────────────────────────────────────────────────────
+
 function formatRelativeTime(dateStr) {
   if (!dateStr) return ''
 
-  // 🔥 ВАЖНОЕ ИСПРАВЛЕНИЕ:
-  // Сервер отдает дату без 'Z' (например "2026-05-07T08:08:26").
-  // JS считает это вашим локальным временем. Мы добавляем 'Z', чтобы JS понял, что это UTC.
   const safeDateStr = (dateStr.endsWith('Z') || dateStr.includes('+')) ? dateStr : dateStr + 'Z';
 
   const d = new Date(safeDateStr)
@@ -40,7 +37,28 @@ function getInitials(u, s) {
   return [u?.[0], s?.[0]].filter(Boolean).join('').toUpperCase() || '?'
 }
 
-// ── Аватар ────────────────────────────────────────────────────────────────
+function renderTextWithLinks(text) {
+  if (!text) return null
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts = text.split(urlRegex)
+  return parts.map((part, i) => {
+    if (urlRegex.test(part)) {
+      urlRegex.lastIndex = 0
+      return (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+             style={{ color: '#60A5FA', textDecoration: 'underline', wordBreak: 'break-all' }}
+             onClick={e => e.stopPropagation()}
+          >{part}</a>
+      )
+    }
+    urlRegex.lastIndex = 0
+    return part.split('\n').map((line, j, arr) => (
+        <span key={`${i}-${j}`}>{line}{j < arr.length - 1 ? <br /> : null}</span>
+    ))
+  })
+}
+
+
 function Avatar({ user, size = 40, onClick }) {
   const url = resolveAvatarUrl(user?.avatarUrl)
   return (
@@ -59,7 +77,7 @@ function Avatar({ user, size = 40, onClick }) {
   )
 }
 
-// ── Секция комментариев (lazy-loaded по клику) ────────────────────────────
+
 function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
   const navigate = useNavigate()
   const [comments, setComments] = useState([])
@@ -68,6 +86,7 @@ function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [hasMore, setHasMore] = useState(false)
+  const commentTextareaRef = useRef(null)
   const LIMIT = 10
 
   async function load(reset = false) {
@@ -115,6 +134,34 @@ function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
     }
   }
 
+  function handleCommentKeyDown(e) {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+
+    if (e.key === 'Enter') {
+      // Ctrl+Enter или Cmd+Enter — отправляем
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        handleSend()
+        return
+      }
+
+      // На мобильных или Shift+Enter — перенос строки
+      if (isMobile || e.shiftKey) {
+        e.preventDefault()
+        const start = e.target.selectionStart
+        const end = e.target.selectionEnd
+        const newVal = text.slice(0, start) + '\n' + text.slice(end)
+        setText(newVal)
+
+        setTimeout(() => {
+          e.target.selectionStart = e.target.selectionEnd = start + 1
+          e.target.style.height = 'auto'
+          e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px'
+        }, 0)
+      }
+    }
+  }
+
   if (!loaded && loading) {
     return (
       <div style={{ padding: '12px 18px', display: 'flex', justifyContent: 'center' }}>
@@ -137,9 +184,9 @@ function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
                   display: 'flex',
                   gap: 10,
                   padding: '10px 18px',
-                  alignItems: 'flex-start',  // ← Изменили с 'center' на 'flex-start'
+                  alignItems: 'flex-start',
                   marginBottom: 5,
-                  borderBottom: '1px solid rgba(0,0,0,0.1)',  // ← Добавили разделитель
+                  borderBottom: '1px solid rgba(0,0,0,0.1)',
                 }}
             >
               <Avatar
@@ -170,7 +217,7 @@ function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
                   marginBottom: 6,
                 }}>
                   <div style={{ fontSize: 14, lineHeight: 1.5, wordBreak: 'break-word' }}>
-                    {c.text}
+                    {renderTextWithLinks(c.text)}
                   </div>
                 </div>
 
@@ -213,37 +260,46 @@ function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
       )}
 
       {/* Ввод */}
-      <div style={{ display: 'flex', gap: 10, padding: '10px 18px 14px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, padding: '10px 18px 14px', alignItems: 'flex-start' }}>
         <Avatar user={currentUser} size={32} />
         <div style={{
-          flex: 1, display: 'flex', alignItems: 'center', gap: 8,
+          flex: 1, display: 'flex', alignItems: 'flex-start', gap: 8,
           background: 'rgba(255,255,255,0.05)',
           border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 999, padding: '6px 8px 6px 14px',
+          borderRadius: 999, padding: '8px 8px 8px 14px',
           transition: 'all 0.2s',
         }}>
-          <input
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="Написать комментарий..."
-            style={{
-              flex: 1, background: 'none', border: 'none', outline: 'none',
-              color: 'var(--text-primary)', fontSize: 13,
-              fontFamily: 'Manrope,sans-serif',
-            }}
-          />
+    <textarea
+        ref={commentTextareaRef}
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={handleCommentKeyDown}
+        placeholder="Написать комментарий..."
+        rows={1}
+        style={{
+          flex: 1, background: 'none', border: 'none', outline: 'none',
+          color: 'var(--text-primary)', fontSize: 13,
+          fontFamily: 'Manrope, sans-serif',
+          resize: 'none', lineHeight: 1.5, maxHeight: 80,
+          overflowY: 'auto', scrollbarWidth: 'none',
+          paddingTop: 2, paddingBottom: 2
+        }}
+        onInput={e => {
+          e.target.style.height = 'auto';
+          e.target.style.height = Math.min(e.target.scrollHeight, 80) + 'px';
+        }}
+    />
           <button onClick={handleSend} disabled={!text.trim() || sending} style={{
             width: 30, height: 30, borderRadius: '50%', border: 'none',
             background: text.trim() && !sending ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(255,255,255,0.06)',
             color: text.trim() && !sending ? '#fff' : 'var(--text-muted)',
             cursor: text.trim() && !sending ? 'pointer' : 'not-allowed',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, transition: 'all 0.2s',
+            flexShrink: 0, transition: 'all 0.2s', marginTop: 2
           }}>
             {sending
-              ? <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} />
-              : <Send size={13} style={{ marginLeft: 1 }} />
+                ? <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} />
+                : <Send size={13} style={{ marginLeft: 1 }} />
             }
           </button>
         </div>
@@ -252,13 +308,13 @@ function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
   )
 }
 
-// ── Карточка поста ────────────────────────────────────────────────────────
+
 export const WallPost = forwardRef(function WallPost({ post: initialPost, currentUserId, currentUser, onDelete, onImageClick  }, ref) {
   const navigate = useNavigate()
   const [post, setPost] = useState(initialPost)
   const [showComments, setShowComments] = useState(false)
   const [liking, setLiking] = useState(false)
-  const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '')
+  const apiBase = (import.meta.env.VITE_API_URL || 'http://api.уконнект.рф/api').replace(/\/api$/, '')
 
   const imageUrl = post.imageUrl
       ? (post.imageUrl.startsWith('http') ? post.imageUrl : `${apiBase}${post.imageUrl}`)
@@ -270,7 +326,7 @@ export const WallPost = forwardRef(function WallPost({ post: initialPost, curren
   async function handleLike() {
     if (liking) return
     setLiking(true)
-    // Оптимистичное обновление
+
     setPost(p => ({
       ...p,
       isLiked: !p.isLiked,
@@ -280,7 +336,7 @@ export const WallPost = forwardRef(function WallPost({ post: initialPost, curren
       const result = await toggleLike(post.postId)
       setPost(p => ({ ...p, isLiked: result.isLiked, likesCount: result.likesCount }))
     } catch {
-      // Откат при ошибке
+
       setPost(p => ({
         ...p,
         isLiked: !p.isLiked,
@@ -294,7 +350,7 @@ export const WallPost = forwardRef(function WallPost({ post: initialPost, curren
 
   return (
       <motion.div
-          ref={ref} // 👈 Сюда передаётся ref от AnimatePresence
+          ref={ref}
           layout
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -338,7 +394,7 @@ export const WallPost = forwardRef(function WallPost({ post: initialPost, curren
         {/* Текст */}
         {post.text && (
             <div style={{ padding: '0 18px 14px', fontSize: 15, lineHeight: 1.65, wordBreak: 'break-word' }}>
-              {post.text}
+              {renderTextWithLinks(post.text)}
             </div>
         )}
 
@@ -404,7 +460,6 @@ export const WallPost = forwardRef(function WallPost({ post: initialPost, curren
           </button>
         </div>
 
-        {/* Комментарии — рендерятся только при открытии */}
         <AnimatePresence>
           {showComments && (
               <motion.div
@@ -427,13 +482,14 @@ export const WallPost = forwardRef(function WallPost({ post: initialPost, curren
   )
 })
 
-// ── ComposeBox ────────────────────────────────────────────────────────────
+
 export function ComposeBox({ currentUser, onPost }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
   const [sending, setSending] = useState(false)
   const fileRef = useRef()
+  const textareaRef = useRef()
 
   function handleFileChange(e) {
     const f = e.target.files[0]
@@ -445,6 +501,59 @@ export function ComposeBox({ currentUser, onPost }) {
     reader.onload = ev => setPreview(ev.target.result)
     reader.readAsDataURL(f)
     e.target.value = ''
+  }
+
+  function handleKeyDown(e) {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+
+    if (e.key === 'Enter') {
+      // Ctrl+Enter или Cmd+Enter — отправляем
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        handleSend()
+        return
+      }
+
+      // На мобильных или Shift+Enter — перенос строки
+      if (isMobile || e.shiftKey) {
+        e.preventDefault()
+        const start = e.target.selectionStart
+        const end = e.target.selectionEnd
+        const newVal = text.slice(0, start) + '\n' + text.slice(end)
+        setText(newVal)
+
+        setTimeout(() => {
+          e.target.selectionStart = e.target.selectionEnd = start + 1
+          e.target.style.height = 'auto'
+          e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px'
+        }, 0)
+      }
+    }
+  }
+
+  function handlePaste(e) {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (!file) return
+
+        const { valid, error } = validateImageFile(file, 10)
+        if (!valid) {
+          toast(error)
+          return
+        }
+        if (file) {
+          setFile(file)
+          const reader = new FileReader()
+          reader.onload = ev => setPreview(ev.target.result)
+          reader.readAsDataURL(file)
+        }
+      }
+    }
   }
 
   async function handleSend() {
@@ -463,112 +572,55 @@ export function ComposeBox({ currentUser, onPost }) {
   const canSend = (text.trim() || file) && !sending
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="glass"
-      style={{ borderRadius: 20, padding: 18, marginBottom: 20, minWidth: 303 }}
-    >
-      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        <Avatar user={currentUser} size={40} />
-        <div style={{ flex: 1, minWidth: 0 }}>
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="glass" style={{ borderRadius: 20, padding: 18, marginBottom: 20, minWidth: 303 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <Avatar user={currentUser} size={40} />
+          <div style={{ flex: 1, minWidth: 0 }}>
           <textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && handleSend()}
-            placeholder="Расскажите что-нибудь"
-            rows={2}
-            style={{
-              width: '100%', padding: '10px 14px', borderRadius: 14,
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              color: 'var(--text-primary)', fontSize: 14,
-              fontFamily: 'Manrope,sans-serif', outline: 'none',
-              resize: 'none', lineHeight: 1.6, maxHeight: 200,
-              overflowY: 'auto', scrollbarWidth: 'none',
-              transition: 'all 0.2s', boxSizing: 'border-box',
-              borderColor: 'rgba(96,165,250,0.3)'
-            }}
-            onFocus={e => {
-              e.target.style.background = 'rgba(59,130,246,0.06)'
-              e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)'
-            }}
-            onBlur={e => {
-              e.target.style.background = 'rgba(255,255,255,0.05)'
-              e.target.style.boxShadow = 'none'
-            }}
-            onInput={e => {
-              e.target.style.height = 'auto'
-              e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px'
-            }}
+              ref={textareaRef}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder="Расскажите что-нибудь "
+              rows={2}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 14, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'Manrope,sans-serif', outline: 'none', resize: 'none', lineHeight: 1.6, maxHeight: 200, overflowY: 'auto', scrollbarWidth: 'none', transition: 'all  0.2s', boxSizing: 'border-box', borderColor: 'rgba(96,165,250,0.3)' }}
+              onFocus={e => { e.target.style.background = 'rgba(59,130,246,0.06)'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)' }}
+              onBlur={e => { e.target.style.background = 'rgba(255,255,255,0.05)'; e.target.style.boxShadow = 'none' }}
+              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px' }}
           />
+            <AnimatePresence>
+              {preview && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ marginTop: 10, position: 'relative', display: 'inline-block' }}>
+                    <img src={preview} alt="preview" style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 12, objectFit: 'cover', display: 'block', border: '1px solid rgba(255,255,255,0 .12)' }} />
+                    <button onClick={() => { setFile(null); setPreview(null) }} style={{ position: 'absolute', top: -8, right: -8, width: 22, height: 22, borderRadius: '50%', background: '#EF4444', border: '2px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color:  '#fff' }}>
+                      <X size={12} />
+                    </button>
+                  </motion.div>
+              )}
+            </AnimatePresence>
 
-          <AnimatePresence>
-            {preview && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                style={{ marginTop: 10, position: 'relative', display: 'inline-block' }}
-              >
-                <img src={preview} alt="preview" style={{
-                  maxWidth: '100%', maxHeight: 180, borderRadius: 12,
-                  objectFit: 'cover', display: 'block',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                }} />
-                <button onClick={() => { setFile(null); setPreview(null) }} style={{
-                  position: 'absolute', top: -8, right: -8,
-                  width: 22, height: 22, borderRadius: '50%',
-                  background: '#EF4444', border: '2px solid rgba(255,255,255,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: '#fff',
-                }}>
-                  <X size={12} />
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => fileRef.current?.click()} style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '7px 14px', borderRadius: 999, border: 'none',
-              background: file ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)',
-              color: file ? '#60A5FA' : 'var(--text-secondary)',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              fontFamily: 'Manrope,sans-serif', transition: 'all 0.2s',
-            }}>
-              <Image size={15} />
-              <span className="wall-btn-label">Фото</span>
-            </button>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={handleFileChange} />
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button onClick={handleSend} disabled={!canSend} style={{
-                display: 'flex', alignItems: 'center', gap: 7,
-                padding: '9px 20px', borderRadius: 999, border: 'none',
-                background: canSend ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(255,255,255,0.06)',
-                color: canSend ? '#fff' : 'var(--text-muted)',
-                fontSize: 14, fontWeight: 700,
-                cursor: canSend ? 'pointer' : 'not-allowed',
-                fontFamily: 'Manrope,sans-serif', transition: 'all 0.2s',
-                boxShadow: canSend ? '0 4px 16px rgba(59,130,246,0.35)' : 'none'
-              }}
-                onMouseEnter={e => { if (canSend) e.currentTarget.style.transform = 'translateY(-1px)' }}
-                onMouseLeave={e => { e.currentTarget.style.transform = '' }}
-              >
-                {sending ? <Loader2 size={15} style={{ animation: 'spin 0.7s linear infinite' }} /> : <Edit size={15} />}
-                <span>{sending ? 'Публикуем...' : 'Опубликовать'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => fileRef.current?.click()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 999, border: 'none', background : file ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.05)', color: file ? '#60A5FA' : 'var(--text-secondary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' , fontFamily: 'Manrope,sans-serif', transition: 'all 0.2s' }}>
+                <Image size={15} />
+                <span className="wall-btn-label ">Фото </span>
               </button>
+              <input ref={fileRef} type="file " accept="image/jpeg,image/png,image/webp " style={{ display: 'none' }} onChange={handleFileChange} />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button onClick={handleSend} disabled={!canSend} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 999, border: 'none', background: canSend ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(255,255,255,0.06)', color: canSend ? '#fff' : 'var(--text-muted)', fontSize: 14, fontWeight: 700, cursor: canSend ? 'pointer' : 'not-allowed', fontFamily: 'Manrope,sans-serif', transition: 'all 0.2s', boxShadow:  canSend ? '0 4px 16px rgba(59,130,246,0.35)' : 'none' }} onMouseEnter={e => { if (canSend) e.currentTarget.style.transform = 'translateY(-1px)' }} onMouseLeave={e => { e.currentTarget.style.transform = '' }}>
+                  {sending ?  <Loader2 size={15} style={{ animation: 'spin 0.7s linear infinite' }} /> :  <Edit size={15} />}
+                  <span >{sending ? 'Публикуем...' : 'Опубликовать'} </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </motion.div>
+      </motion.div>
   )
 }
 
-// ── Skeleton (пока грузятся посты) ────────────────────────────────────────
+
 export function PostSkeleton() {
   return (
     <div className="glass" style={{ borderRadius: 20, padding: '16px 18px', marginBottom: 14 }}>
@@ -585,7 +637,7 @@ export function PostSkeleton() {
   )
 }
 
-// ── Главная страница Wall ─────────────────────────────────────────────────
+
 const LIMIT = 20
 
 export default function Wall() {
@@ -602,12 +654,109 @@ export default function Wall() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const offsetRef = useRef(0)
   const loaderRef = useRef(null)
+  const imgRef = useRef(null)
+  const touchStateRef = useRef({ lastDist: 0, lastScale: 1, lastPos: { x: 0, y: 0 }, touches: [] })
   const navigate = useNavigate()
 
   // Первоначальная загрузка
   useEffect(() => {
     fetchPosts(true)
   }, [])
+
+  useEffect(() => {
+    if (!selectedImage) return
+
+    const preventPageZoom = (e) => {
+      if (e.touches.length > 1) e.preventDefault()
+    }
+    document.addEventListener('touchmove', preventPageZoom, { passive: false })
+
+    const el = imgRef.current
+    if (!el) {
+      return () => document.removeEventListener('touchmove', preventPageZoom)
+    }
+
+    function getDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX
+      const dy = touches[0].clientY - touches[1].clientY
+      return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    function onTouchStart(e) {
+      e.stopPropagation()
+      const ts = touchStateRef.current
+      if (e.touches.length === 2) {
+        ts.lastDist = getDistance(e.touches)
+        ts.lastScaleOnStart = ts.currentScale ?? 1
+        ts.lastPosOnStart = ts.currentPos ? { ...ts.currentPos } : { x: 0, y: 0 }
+      } else if (e.touches.length === 1) {
+        ts.dragStart = {
+          x: e.touches[0].clientX - (ts.currentPos?.x ?? 0),
+          y: e.touches[0].clientY - (ts.currentPos?.y ?? 0),
+        }
+      }
+    }
+
+    function onTouchMove(e) {
+      e.preventDefault()
+      e.stopPropagation()
+      const ts = touchStateRef.current
+
+      if (e.touches.length === 2) {
+        const dist = getDistance(e.touches)
+        const ratio = dist / (ts.lastDist || dist)
+        const newScale = Math.max(0.5, Math.min(5, (ts.lastScaleOnStart ?? 1) * ratio))
+        ts.currentScale = newScale
+        setScale(newScale)
+      } else if (e.touches.length === 1) {
+        const curScale = ts.currentScale ?? 1
+        if (curScale <= 1) return
+        const newPos = {
+          x: e.touches[0].clientX - (ts.dragStart?.x ?? 0),
+          y: e.touches[0].clientY - (ts.dragStart?.y ?? 0),
+        }
+        ts.currentPos = newPos
+        setPosition(newPos)
+      }
+    }
+
+    function onTouchEnd(e) {
+      const ts = touchStateRef.current
+      const now = Date.now()
+      if (e.touches.length === 0 && e.changedTouches.length === 1) {
+        if (ts.lastTap && now - ts.lastTap < 300) {
+          const nextScale = (ts.currentScale ?? 1) > 1 ? 1 : 2.5
+          ts.currentScale = nextScale
+          ts.currentPos = { x: 0, y: 0 }
+          setScale(nextScale)
+          setPosition({ x: 0, y: 0 })
+          ts.lastTap = 0
+        } else {
+          ts.lastTap = now
+        }
+      }
+      if (e.touches.length === 0) {
+        ts.lastScaleOnStart = ts.currentScale ?? 1
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+
+    return () => {
+      document.removeEventListener('touchmove', preventPageZoom)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [selectedImage])
+
+// Синхронизируем touchStateRef с актуальным scale/position
+  useEffect(() => {
+    touchStateRef.current.currentScale = scale
+    touchStateRef.current.currentPos = position
+  }, [scale, position])
 
   async function fetchPosts(reset = false) {
     if (reset) {
@@ -692,7 +841,7 @@ export default function Wall() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Navbar showLinks />
+      <Navbar />
       <Toast />
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -784,7 +933,10 @@ export default function Wall() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={() => { setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                onClick={() => {
+                  setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
+                  touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
+                }}
                 style={{
                   position: 'fixed',
                   inset: 0,
@@ -798,9 +950,11 @@ export default function Wall() {
                   overflow: 'hidden',
                 }}
             >
-              {/* Кнопка закрытия ✨ добавлен drop-shadow для иконки */}
               <button
-                  onClick={(e) => { e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                  onClick={(e) => {
+                    e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
+                    touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
+                  }}
                   style={{
                     position: 'absolute',
                     top: 20,
@@ -823,7 +977,6 @@ export default function Wall() {
                 <X size={24} />
               </button>
 
-              {/* Кнопки управления zoom ✨ добавлены тени и рамка */}
               <div style={{
                 position: 'absolute',
                 bottom: 30,
@@ -912,6 +1065,7 @@ export default function Wall() {
 
               {/* Изображение с zoom и drag */}
               <motion.img
+                  ref={imgRef}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -923,19 +1077,18 @@ export default function Wall() {
                       setSelectedImage(null)
                       setScale(1)
                       setPosition({ x: 0, y: 0 })
+                      touchStateRef.current = { lastDist: 0, lastScale: 1, lastPos: { x: 0, y: 0 }, touches: [] }
                     }
                   }}
                   onDoubleClick={(e) => {
                     e.stopPropagation()
-                    setScale(s => s < 1 ? 1 : s + 0.5)
+                    setScale(s => s > 1 ? 1 : 2.5)
+                    setPosition({ x: 0, y: 0 })
                   }}
                   onWheel={(e) => {
                     e.stopPropagation()
-                    const delta = e.deltaY > 0 ? -0.1 : 0.1
-                    setScale(s => {
-                      const newScale = Math.max(0.5, Math.min(5, s + delta))
-                      return newScale
-                    })
+                    const delta = e.deltaY > 0 ? -0.15 : 0.15
+                    setScale(s => Math.max(0.5, Math.min(5, s + delta)))
                   }}
                   style={{
                     maxWidth: '90vw',
@@ -945,9 +1098,10 @@ export default function Wall() {
                     boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
                     cursor: scale > 1 ? 'grab' : 'zoom-out',
                     transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
-                    transition: scale === 1 ? 'transform 0.3s ease' : 'none',
+                    transition: isDragging ? 'none' : scale === 1 ? 'transform 0.3s ease' : 'none',
                     userSelect: 'none',
-                    touchAction: 'pan-x pan-y',
+                    touchAction: 'none',
+                    WebkitUserSelect: 'none',
                   }}
                   onMouseDown={(e) => {
                     if (scale <= 1) return
@@ -959,13 +1113,13 @@ export default function Wall() {
                     if (!isDragging || scale <= 1) return
                     e.preventDefault()
                     setPosition({
-                      x: (e.clientX - dragStart.x) / scale,
-                      y: (e.clientY - dragStart.y) / scale,
+                      x: (e.clientX - dragStart.x),
+                      y: (e.clientY - dragStart.y),
                     })
                   }}
                   onMouseUp={(e) => {
                     setIsDragging(false)
-                    e.currentTarget.style.cursor = 'grab'
+                    e.currentTarget.style.cursor = scale > 1 ? 'grab' : 'zoom-out'
                   }}
                   onMouseLeave={() => setIsDragging(false)}
               />

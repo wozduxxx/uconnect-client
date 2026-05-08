@@ -113,7 +113,6 @@ export default function Register() {
               Создайте аккаунт, чтобы начать
             </div>
 
-            {/* 🔹 ОБЕРНУЛИ ВСЕ ПОЛЯ В <form> */}
             <form onSubmit={(e) => { e.preventDefault(); handleRegister(); }}>
 
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
@@ -215,7 +214,7 @@ export default function Register() {
                 )}
                 {loading ? 'Регистрация...' : 'Зарегистрироваться'}
               </Button>
-            </form> {/* 🔹 Закрыли форму */}
+            </form>
 
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 

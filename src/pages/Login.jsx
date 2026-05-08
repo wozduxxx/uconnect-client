@@ -115,7 +115,7 @@ export default function Login() {
                 <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
                 <Button
-                    type="submit"  // 👈 Добавьте type="submit"
+                    type="submit"
                     fullWidth
                     disabled={loading}
                     style={{ marginTop: 8, padding: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}

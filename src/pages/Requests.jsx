@@ -38,18 +38,23 @@ export default function Requests() {
     load()
   }, [])
 
-  async function handleAccept(req) {
+  async function handleAccept(req, e) {
+    e?.stopPropagation()
     setActionLoading(prev => ({ ...prev, [req.fromUserId]: 'accept' }))
     try {
       await acceptFriendRequest(req.fromUserId)
       await sendMessage({
         receiverId: req.fromUserId,
-        message: "Привет, я принял твою заявку!",
+        message: "Привет, я принял(а) твою заявку!",
       })
       toast(`Вы теперь друзья!`)
+
       setRequests(prev => prev.filter(r => r.fromUserId !== req.fromUserId))
-      // Добавляем в список друзей
       setFriends(prev => [...prev, { userId: req.fromUserId, ...req.user }])
+
+      const newCount = requests.length - 1
+      window.dispatchEvent(new CustomEvent('friend-requests-sync', { detail: newCount }))
+
     } catch (err) {
       const msg = err.response?.data || 'Ошибка'
       toast(typeof msg === 'string' ? msg : 'Ошибка')
@@ -58,12 +63,19 @@ export default function Requests() {
     }
   }
 
-  async function handleReject(req) {
+
+  async function handleReject(req, e) {
+    e?.stopPropagation()
     setActionLoading(prev => ({ ...prev, [req.fromUserId]: 'reject' }))
     try {
       await rejectFriendRequest(req.fromUserId)
       toast('Заявка отклонена')
+
       setRequests(prev => prev.filter(r => r.fromUserId !== req.fromUserId))
+
+      const newCount = requests.length - 1
+      window.dispatchEvent(new CustomEvent('friend-requests-sync', { detail: newCount }))
+
     } catch (err) {
       const msg = err.response?.data || 'Ошибка'
       toast(typeof msg === 'string' ? msg : 'Ошибка')
@@ -84,7 +96,7 @@ export default function Requests() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Navbar showLinks />
+      <Navbar />
       <Toast />
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -116,7 +128,6 @@ export default function Requests() {
             </div>
           )}
 
-          {/* ── Вкладка: Входящие запросы ───────────────────────────────────── */}
           {!loading && tab === 'requests' && (
             <>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
@@ -189,7 +200,7 @@ export default function Requests() {
                         {/* Действия */}
                         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                           <button
-                            onClick={() => handleAccept(req)}
+                            onClick={(e) => handleAccept(req, e)}
                             disabled={isActing}
                             style={{
                               width: 38, height: 38, borderRadius: '50%',
@@ -205,7 +216,7 @@ export default function Requests() {
 
                           </button>
                           <button
-                            onClick={() => handleReject(req)}
+                            onClick={(e) => handleReject(req, e)}
                             disabled={isActing}
                             style={{
                               width: 38, height: 38, borderRadius: '50%',
@@ -228,7 +239,6 @@ export default function Requests() {
             </>
           )}
 
-          {/* ── Вкладка: Список друзей ──────────────────────────────────────── */}
           {!loading && tab === 'friends' && (
             <>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>

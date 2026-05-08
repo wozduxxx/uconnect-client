@@ -20,7 +20,6 @@ export default function EditProfileModal({ open, onClose, profile, onSave }) {
     const avatarRef = useRef()
     const bannerRef = useRef()
 
-    // 🔹 Вычисляем инициалы для фолбэка
     const initials = form.name
         ? form.name.split(' ').map(n => n[0]).filter(Boolean).join('').toUpperCase().slice(0, 2)
         : '👤'
@@ -59,11 +58,10 @@ export default function EditProfileModal({ open, onClose, profile, onSave }) {
             return
         }
 
-        // 🔑 КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: передаём avatarFile и bannerFile явно!
         onSave({
             ...form,
-            avatarFile,      // 👈 Без этого файл не попадёт в FormData
-            bannerFile,      // 👈 Файл обложки
+            avatarFile,
+            bannerFile,
             avatarPreview,
             bannerPreview,
             avatarIsImage: !!avatarFile,
@@ -100,13 +98,12 @@ export default function EditProfileModal({ open, onClose, profile, onSave }) {
                         }}
                     />
 
-                    {/* 🔹 Modal + класс hide-scroll */}
                     <motion.div
                         initial={{ opacity: 0, y: 28, scale: 0.97 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 16, scale: 0.97 }}
                         transition={{ duration: 0.26, ease: [0.4, 0, 0.2, 1] }}
-                        className="hide-scroll" // 👈 Скрывает скроллбар
+                        className="hide-scroll"
                         style={{
                             pointerEvents: 'auto', width: '100%', maxWidth: 460,
                             maxHeight: '90vh', overflowY: 'auto', borderRadius: 24,
@@ -217,7 +214,6 @@ export default function EditProfileModal({ open, onClose, profile, onSave }) {
                 </div>
             )}
 
-            {/* 🔹 CSS для скрытия скроллбара (работает во всех браузерах) */}
             <style>{`
                 .hide-scroll::-webkit-scrollbar { display: none; }
                 .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }

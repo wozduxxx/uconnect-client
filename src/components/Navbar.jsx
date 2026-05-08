@@ -1,15 +1,125 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { getMyChats } from '../api/messages'
+import { getMyRequests } from '../api/friends'
 
-export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
+export default function Navbar({ unreadMessages = 0, spacer = true, isInChat = false }) {
     const navigate = useNavigate()
     const { pathname } = useLocation()
     const { user, logout } = useAuth()
 
     const [menuOpen, setMenuOpen] = useState(false)
     const [isMobile, setIsMobile] = useState(false)
+
+    const [displayUnread, setDisplayUnread] = useState(() => {
+        const saved = localStorage.getItem('unreadCount')
+        return saved ? Number(saved) : unreadMessages
+    })
+    const lastUnreadRef = useRef(displayUnread)
+
+    const [friendRequestsCount, setFriendRequestsCount] = useState(() => {
+        const saved = localStorage.getItem('friendRequestsCount')
+        return saved ? Number(saved) : 0
+    })
+    const lastRequestsRef = useRef(friendRequestsCount)
+
+    useEffect(() => {
+        if (unreadMessages !== lastUnreadRef.current) {
+            lastUnreadRef.current = unreadMessages
+            setDisplayUnread(unreadMessages)
+            localStorage.setItem('unreadCount', unreadMessages.toString())
+        }
+    }, [unreadMessages])
+
+    useEffect(() => {
+        const handler = (e) => {
+            const total = e.detail
+            if (total !== lastUnreadRef.current) {
+                lastUnreadRef.current = total
+                setDisplayUnread(total)
+                localStorage.setItem('unreadCount', total.toString())
+            }
+        }
+        window.addEventListener('unread-sync', handler)
+        return () => window.removeEventListener('unread-sync', handler)
+    }, [])
+
+    useEffect(() => {
+        if (isInChat || !user) return
+
+        let mounted = true
+        const poll = async () => {
+            try {
+                const chats = await getMyChats()
+                const total = chats.reduce((acc, c) => acc + (c.unreadCount || 0), 0)
+                if (mounted && total !== lastUnreadRef.current) {
+                    lastUnreadRef.current = total
+                    setDisplayUnread(total)
+                    localStorage.setItem('unreadCount', total.toString())
+                    window.dispatchEvent(new CustomEvent('unread-sync', { detail: total }))
+                }
+            } catch {
+            }
+        }
+
+        poll()
+
+        const interval = setInterval(poll, 20000)
+        return () => {
+            mounted = false
+            clearInterval(interval)
+        }
+    }, [isInChat, user])
+
+    useEffect(() => {
+        if (friendRequestsCount !== lastRequestsRef.current) {
+            lastRequestsRef.current = friendRequestsCount
+            setFriendRequestsCount(friendRequestsCount)
+            localStorage.setItem('friendRequestsCount', friendRequestsCount.toString())
+        }
+    }, [friendRequestsCount])
+
+    useEffect(() => {
+        const handler = (e) => {
+            const count = e.detail
+            if (count !== lastRequestsRef.current) {
+                lastRequestsRef.current = count
+                setFriendRequestsCount(count)
+                localStorage.setItem('friendRequestsCount', count.toString())
+            }
+        }
+        window.addEventListener('friend-requests-sync', handler)
+        return () => window.removeEventListener('friend-requests-sync', handler)
+    }, [])
+
+    useEffect(() => {
+        if (!user || pathname === '/requests') return
+
+        let mounted = true
+        const poll = async () => {
+            try {
+                const requests = await getMyRequests()
+                const count = requests.length
+                if (mounted && count !== lastRequestsRef.current) {
+                    lastRequestsRef.current = count
+                    setFriendRequestsCount(count)
+                    localStorage.setItem('friendRequestsCount', count.toString())
+                    window.dispatchEvent(new CustomEvent('friend-requests-sync', { detail: count }))
+                }
+            } catch {
+            }
+        }
+
+        poll()
+
+        const interval = setInterval(poll, 20000)
+        return () => {
+            mounted = false
+            clearInterval(interval)
+        }
+    }, [user, pathname])
 
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth <= 767)
@@ -27,23 +137,34 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
     const closeMenu = () => setMenuOpen(false)
     const openMenu = () => setMenuOpen(true)
 
-    const navItems = [
+    const authNavItems = [
         { label: 'Поиск', path: '/search' },
         { label: 'Стенка', path: '/wall' },
-        { label: 'Коннекты', path: '/requests' },
-        { label: 'Чаты', path: '/chat', hasBadge: unreadMessages > 0 },
+        { label: 'Коннекты', path: '/requests', hasBadge: friendRequestsCount > 0 },
+        { label: 'Чаты', path: '/chat', hasBadge: displayUnread > 0 },
         { label: 'Профиль', path: '/profile' },
     ]
+
+    const guestNavItems = [
+
+    ]
+
+    const navItems = user ? authNavItems : guestNavItems
 
     const getLinkStyle = (isActive) => ({
         color: isActive ? '#4199ff' : 'var(--text-secondary)',
         border: 'none',
         background: 'transparent',
-        cursor: 'pointer', fontFamily: 'Manrope, sans-serif',
+        cursor: 'pointer',
+        fontFamily: 'Manrope, sans-serif',
         padding: '8px 12px',
-        borderRadius: '9999px', fontSize: '14px', fontWeight: 600,
+        borderRadius: '9999px',
+        fontSize: '14px',
+        fontWeight: 600,
         transition: 'all 0.2s ease',
-        display: 'inline-flex', alignItems: 'center', gap: 6,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
         position: 'relative',
     })
 
@@ -82,58 +203,95 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
                     </button>
                 )
             })}
-            <button
-                onClick={() => { handleLogout(); mobile && closeMenu() }}
-                style={{
-                    ...getLinkStyle(false),
-                    color: '#ff6363',
-                    paddingLeft: 16,
-                    ...(mobile && {
-                        marginTop: 12,
-                        borderTop: '1px solid rgba(0,0,0,0.06)',
-                        paddingTop: 14,
-                        borderRadius: '12px',
-                    }),
-                }}
-            >
-                Выход
-            </button>
+
+            {user && (
+                <button
+                    onClick={() => { handleLogout(); mobile && closeMenu() }}
+                    style={{
+                        ...getLinkStyle(false),
+                        color: '#ff6363',
+                        ...(mobile && {
+                            marginTop: 12,
+                            borderTop: '1px solid rgba(0,0,0,0.06)',
+                            paddingTop: 14,
+                            borderRadius: '12px',
+                        }),
+                    }}
+                >
+                    Выход
+                </button>
+            )}
+
+            {!user && (
+                <>
+                    <button
+                        onClick={() => { navigate('/login'); mobile && closeMenu() }}
+                        style={{
+                            ...getLinkStyle(pathname === '/login'), // ✅ Как обычные ссылки
+                            ...(mobile && {
+                                marginTop: 12,
+                                borderTop: '1px solid rgba(0,0,0,0.06)',
+                                paddingTop: 14,
+                                borderRadius: '12px',
+                            }),
+                        }}
+                    >
+                        Вход
+                    </button>
+                    <button
+                        onClick={() => { navigate('/register'); mobile && closeMenu() }}
+                        style={{
+                            ...getLinkStyle(pathname === '/register'), // ✅ Как обычные ссылки
+                            ...(mobile && {
+                                marginTop: 8,
+                                borderRadius: '12px',
+                            }),
+                        }}
+                    >
+                        Регистрация
+                    </button>
+                </>
+            )}
         </div>
     )
 
     return (
         <>
             <nav
-                className="sticky top-0 z-50 flex items-center justify-between py-3"
+                className={`${isInChat ? 'sticky' : 'fixed'} top-0 z-50 flex items-center justify-between`}
                 style={{
                     background: 'linear-gradient(135deg,rgba(110,110,255,0.05),rgba(167,139,250,0.1))',
-                    backdropFilter: 'blur(20px)',
-                    WebkitBackdropFilter: 'blur(20px)',
+                    backdropFilter: 'blur(50px)',
+                    WebkitBackdropFilter: 'blur(50px)',
                     borderBottom: '1px solid rgba(90,120,255,0.1)',
                     paddingLeft: isMobile ? '1.25rem' : '2.5rem',
                     paddingRight: isMobile ? '1.25rem' : '2.5rem',
                     paddingTop: isMobile ? '0.25rem' : '0.75rem',
-                    paddingBottom: isMobile ? '0.25rem' : '0.75rem'
+                    paddingBottom: isMobile ? '0.25rem' : '0.75rem',
+                    width: '100%',
+                    // Sticky: участвует в flex-потоке → Chat знает реальную высоту
+                    // Fixed: плавает над контентом → остальные страницы используют spacer
+                    flexShrink: 0,
                 }}
             >
-        <span
-            className="text-xl font-black cursor-pointer tracking-tight select-none"
-            style={{
-                background: 'linear-gradient(135deg,#60A5FA,#A78BFA)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-            }}
-            onClick={() => navigate(-1)}
-        >
-          УКоннект
-        </span>
+                <span
+                    className="text-xl font-black cursor-pointer tracking-tight select-none"
+                    style={{
+                        background: 'linear-gradient(135deg,#60A5FA,#A78BFA)',
+                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                    }}
+                    onClick={() => navigate('/')}
+                >
+                    УКоннект
+                </span>
 
-                {showLinks && !isMobile && (
+                {!isMobile && (
                     <div className="flex items-center gap-2">
                         {renderLinks(false)}
                     </div>
                 )}
 
-                {showLinks && isMobile && (
+                {isMobile && (
                     <button
                         onClick={openMenu}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 8 }}
@@ -143,8 +301,12 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
                 )}
             </nav>
 
+            {spacer && !isInChat && (
+                <div style={{ height: 'var(--navbar-height)' }} aria-hidden="true" />
+            )}
+
             {/* Мобильное меню */}
-            {isMobile && showLinks && (
+            {isMobile && (
                 <>
                     <div
                         onClick={closeMenu}
@@ -162,7 +324,7 @@ export default function Navbar({ showLinks = false, unreadMessages = 0 }) {
                             transform: menuOpen ? 'translateX(0)' : 'translateX(100%)',
                             transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
                             background: '#F0F4FF',
-                            backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)',
+                            backdropFilter: 'blur(60px)', WebkitBackdropFilter: 'blur(60px)',
                             borderLeft: '1px solid rgba(255,255,255,0.08)',
                         }}
                     >

@@ -32,7 +32,8 @@ export function validateImageFile(file, maxSizeMB = 5) {
  */
 export function resolveAvatarUrl(avatarUrl) {
   if (!avatarUrl) return null
-  const base = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '')
+  const apiUrl  = (import.meta.env.VITE_API_URL || 'http://api.уконнект.рф/api').replace(/\/api$/, '')
+  const base = new URL(apiUrl).origin
   return `${base}${avatarUrl}`
 }
 

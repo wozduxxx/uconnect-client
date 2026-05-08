@@ -11,10 +11,34 @@ import { resolveAvatarUrl, validateImageFile } from '../utils/fileUtils'
 import { useNavigate } from 'react-router-dom'
 import { getMyFriends } from '../api/friends'
 
-// ── Утилиты ───────────────────────────────────────────────────────────────
+
+
+// Рендерит текст с активными ссылками и переносами строк
+function renderTextWithLinks(text) {
+  if (!text) return null
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts = text.split(urlRegex)
+  return parts.map((part, i) => {
+    if (urlRegex.test(part)) {
+      urlRegex.lastIndex = 0
+      return (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+             style={{ color: '#60A5FA', textDecoration: 'underline', wordBreak: 'break-all' }}
+             onClick={e => e.stopPropagation()}
+          >{part}</a>
+      )
+    }
+    urlRegex.lastIndex = 0
+    return part.split('\n').map((line, j, arr) => (
+        <span key={`${i}-${j}`}>{line}{j < arr.length - 1 ? <br /> : null}</span>
+    ))
+  })
+}
+
 function formatTime(dateStr) {
   if (!dateStr) return ''
-  const d = new Date(dateStr)
+  const safeDateStr = (dateStr.endsWith('Z') || dateStr.includes('+')) ? dateStr : dateStr + 'Z';
+  const d = new Date(safeDateStr)
   return d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
 
@@ -31,20 +55,22 @@ function getResponsiveScale(imgElement) {
 
 function formatChatDate(dateStr) {
   if (!dateStr) return ''
-  const d = new Date(dateStr)
+  const safeDateStr = (dateStr.endsWith('Z') || dateStr.includes('+')) ? dateStr : dateStr + 'Z';
+  const d = new Date(safeDateStr)
   const now = new Date()
   const isToday = d.toDateString() === now.toDateString()
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
   const isYesterday = d.toDateString() === yesterday.toDateString()
-  if (isToday) return formatTime(dateStr)
+  if (isToday) return formatTime(safeDateStr)
   if (isYesterday) return 'Вчера'
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
 }
 
 function formatDayLabel(dateStr) {
   if (!dateStr) return ''
-  const d = new Date(dateStr)
+  const safeDateStr = (dateStr.endsWith('Z') || dateStr.includes('+')) ? dateStr : dateStr + 'Z';
+  const d = new Date(safeDateStr)
   const now = new Date()
   const isToday = d.toDateString() === now.toDateString()
   const yesterday = new Date(now)
@@ -82,10 +108,10 @@ function Avatar({ user, size = 44, onClick }) {
   )
 }
 
-// ── Пузырь сообщения ──────────────────────────────────────────────────────
+
 function MessageBubble({ msg, onImageClick }) {
   const isMine = msg.isMine
-  const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '')
+  const apiBase = (import.meta.env.VITE_API_URL || 'http://api.уконнект.рф/api').replace(/\/api$/, '')
 
   return (
       <motion.div
@@ -116,7 +142,7 @@ function MessageBubble({ msg, onImageClick }) {
                 wordBreak: 'break-word',
                 backdropFilter: isMine ? 'none' : 'blur(10px)',
               }}>
-                {msg.messageText}
+                {renderTextWithLinks(msg.messageText)}
               </div>
           )}
 
@@ -163,7 +189,7 @@ function MessageBubble({ msg, onImageClick }) {
   )
 }
 
-// ── Разделитель дат ───────────────────────────────────────────────────────
+
 function DateDivider({ label }) {
   return (
       <div style={{
@@ -186,7 +212,7 @@ function DateDivider({ label }) {
   )
 }
 
-// ── Превью файлов перед отправкой ─────────────────────────────────────────
+
 function FilePreview({ files, onRemove }) {
   if (!files.length) return null
   return (
@@ -223,7 +249,7 @@ function FilePreview({ files, onRemove }) {
   )
 }
 
-// ── Главный компонент Chat ────────────────────────────────────────────────
+
 export default function Chat() {
   const navigate = useNavigate()
 
@@ -245,10 +271,21 @@ export default function Chat() {
   const [chatSearch, setChatSearch] = useState('')
   const [mobileShowChat, setMobileShowChat] = useState(false)
 
+  const [showSearch, setShowSearch] = useState(false)
+
+  const [initialLoadDone, setInitialLoadDone] = useState(false)
+  const [pollingOffset, setPollingOffset] = useState(0)
+  const isInitialLoadRef = useRef(false)
+
+  const isManualUpdateRef = useRef(false)
+
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
   const pollingRef = useRef(null)
   const textareaRef = useRef(null)
+  const imgRef = useRef(null)
+  const touchStateRef = useRef({ lastDist: 0, lastScale: 1, lastPos: { x: 0, y: 0 }, touches: [] })
+  const navbarRef = useRef(null)
 
   // Закрытие модалки по Escape
   useEffect(() => {
@@ -263,7 +300,126 @@ export default function Chat() {
     return () => window.removeEventListener('keydown', handleEsc)
   }, [selectedImage])
 
-  // ── Загрузка списка чатов ──────────────────────────────────────────────
+
+  useEffect(() => {
+    document.body.classList.add('chat-page-active')
+    return () => document.body.classList.remove('chat-page-active')
+  }, [])
+
+
+  // Нужно для мобильных панелей с position:fixed — они используют top: var(--chat-navbar-h)
+  useEffect(() => {
+    if (!navbarRef.current) return
+    const el = navbarRef.current
+    const update = () => {
+      const h = el.offsetHeight
+      document.documentElement.style.setProperty('--chat-navbar-h', h + 'px')
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+
+  useEffect(() => {
+    if (!selectedImage) return
+
+    // Блокируем нативный pinch-zoom браузера пока открыта модалка
+    const preventPageZoom = (e) => {
+      if (e.touches.length > 1) e.preventDefault()
+    }
+    document.addEventListener('touchmove', preventPageZoom, { passive: false })
+
+    const el = imgRef.current
+    if (!el) {
+      return () => document.removeEventListener('touchmove', preventPageZoom)
+    }
+
+    function getDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX
+      const dy = touches[0].clientY - touches[1].clientY
+      return Math.sqrt(dx * dx + dy * dy)
+    }
+
+    function onTouchStart(e) {
+      e.stopPropagation()
+      const ts = touchStateRef.current
+      if (e.touches.length === 2) {
+        ts.lastDist = getDistance(e.touches)
+        ts.lastScaleOnStart = ts.currentScale ?? 1
+        ts.lastPosOnStart = ts.currentPos ? { ...ts.currentPos } : { x: 0, y: 0 }
+      } else if (e.touches.length === 1) {
+        ts.dragStart = {
+          x: e.touches[0].clientX - (ts.currentPos?.x ?? 0),
+          y: e.touches[0].clientY - (ts.currentPos?.y ?? 0),
+        }
+      }
+    }
+
+    function onTouchMove(e) {
+      e.preventDefault()
+      e.stopPropagation()
+      const ts = touchStateRef.current
+
+      if (e.touches.length === 2) {
+        const dist = getDistance(e.touches)
+        const ratio = dist / (ts.lastDist || dist)
+        const newScale = Math.max(0.5, Math.min(5, (ts.lastScaleOnStart ?? 1) * ratio))
+        ts.currentScale = newScale
+        setScale(newScale)
+      } else if (e.touches.length === 1) {
+        const curScale = ts.currentScale ?? 1
+        if (curScale <= 1) return
+        const newPos = {
+          x: e.touches[0].clientX - (ts.dragStart?.x ?? 0),
+          y: e.touches[0].clientY - (ts.dragStart?.y ?? 0),
+        }
+        ts.currentPos = newPos
+        setPosition(newPos)
+      }
+    }
+
+    function onTouchEnd(e) {
+      const ts = touchStateRef.current
+      const now = Date.now()
+      if (e.touches.length === 0 && e.changedTouches.length === 1) {
+        if (ts.lastTap && now - ts.lastTap < 300) {
+          const nextScale = (ts.currentScale ?? 1) > 1 ? 1 : 2.5
+          ts.currentScale = nextScale
+          ts.currentPos = { x: 0, y: 0 }
+          setScale(nextScale)
+          setPosition({ x: 0, y: 0 })
+          ts.lastTap = 0
+        } else {
+          ts.lastTap = now
+        }
+      }
+      // Синхронизируем lastScaleOnStart после отпускания
+      if (e.touches.length === 0) {
+        ts.lastScaleOnStart = ts.currentScale ?? 1
+      }
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+
+    return () => {
+      document.removeEventListener('touchmove', preventPageZoom)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [selectedImage])
+
+  // Синхронизируем touchStateRef с актуальным scale/position
+  useEffect(() => {
+    touchStateRef.current.currentScale = scale
+    touchStateRef.current.currentPos = position
+  }, [scale, position])
+
+
   const loadChats = useCallback(async (silent = false) => {
     if (!silent) setChatsLoading(true)
     try {
@@ -311,20 +467,40 @@ export default function Chat() {
 
   useEffect(() => { loadChats() }, [loadChats])
 
-  // ── Загрузка истории и polling ─────────────────────────────────────────
-  const loadMessages = useCallback(async (receiverId, silent = false) => {
+
+  const loadMessages = useCallback(async (receiverId, { offset = 0, accumulate = true, silent = false } = {}) => {
     if (!silent) setMessagesLoading(true)
+
     try {
-      const data = await getChatHistory(receiverId)
-      setMessages(data)
-      setChats(prev => prev.map(c =>
-          c.interlocutorId === receiverId ? { ...c, unreadCount: 0 } : c
-      ))
+      const data = await getChatHistory(receiverId, { offset, limit: 50 })
+      const list = Array.isArray(data) ? data : []
+
+      if (accumulate) {
+        setMessages(prev => offset === 0 ? list : [...prev, ...list])
+      } else {
+        setMessages(list)
+      }
+
+      if (list.length > 0) {
+        return loadMessages(receiverId, {
+          offset: offset + list.length,
+          accumulate: true,
+          silent: true
+        })
+      }
+
+      else {
+        setPollingOffset(offset)
+        setInitialLoadDone(true)
+        return list
+      }
+
     } catch (err) {
       if (!silent) {
         const msg = err.response?.data || 'Ошибка загрузки сообщений'
         toast(typeof msg === 'string' ? msg : 'Ошибка загрузки сообщений')
       }
+      throw err
     } finally {
       if (!silent) setMessagesLoading(false)
     }
@@ -336,30 +512,55 @@ export default function Chat() {
     setFiles([])
     setText('')
     setMobileShowChat(true)
-    loadMessages(chat.interlocutorId)
+
+    setInitialLoadDone(false)
+    setPollingOffset(0)
+    isInitialLoadRef.current = false
+    isManualUpdateRef.current = true
+    loadMessages(chat.interlocutorId, { offset: 0, accumulate: false, silent: false })
   }
 
   useEffect(() => {
     if (pollingRef.current) clearInterval(pollingRef.current)
-    if (selectedChat) {
-      pollingRef.current = setInterval(() => {
-        loadMessages(selectedChat.interlocutorId, true)
-        loadChats(true)
+
+    if (selectedChat && initialLoadDone) {
+      pollingRef.current = setInterval(async () => {
+        try {
+          const data = await getChatHistory(selectedChat.interlocutorId, {
+            offset: pollingOffset,
+            limit: 50
+          })
+          const list = Array.isArray(data) ? data : []
+
+          if (list.length > 0) {
+            setMessages(prev => [...prev, ...list])
+            setPollingOffset(prev => prev + list.length)
+
+            setChats(prev => prev.map(c =>
+                c.interlocutorId === selectedChat.interlocutorId
+                    ? { ...c, unreadCount: 0 }
+                    : c
+            ))
+          }
+        } catch (err) {
+        }
       }, 10000)
     }
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current) }
-  }, [selectedChat, loadMessages, loadChats])
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
+    }
+  }, [selectedChat, initialLoadDone, pollingOffset])
 
-  // ── Отправка сообщения ─────────────────────────────────────────────────
   async function handleSend() {
     const trimmed = text.trim()
     if (!trimmed && !files.length) return
     if (!selectedChat) return
+
     setSending(true)
+
+    isManualUpdateRef.current = true
+
     const optimisticMsg = {
       messageId: Date.now(),
       senderId: -1,
@@ -372,13 +573,16 @@ export default function Chat() {
     setMessages(prev => [...prev, optimisticMsg])
     setText('')
     setFiles([])
+
     try {
       await sendMessage({
         receiverId: selectedChat.interlocutorId,
         message: trimmed,
         files,
       })
-      await loadMessages(selectedChat.interlocutorId, true)
+
+      setPollingOffset(prev => prev + 1)
+
       await loadChats(true)
     } catch (err) {
       setMessages(prev => prev.filter(m => !m._optimistic))
@@ -391,9 +595,28 @@ export default function Chat() {
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+
+    if (e.key === 'Enter') {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        handleSend()
+        return
+      }
+
+      if (isMobile || e.shiftKey) {
+        e.preventDefault()
+        const start = e.target.selectionStart
+        const end = e.target.selectionEnd
+        const newVal = text.slice(0, start) + '\n' + text.slice(end)
+        setText(newVal)
+
+        setTimeout(() => {
+          e.target.selectionStart = e.target.selectionEnd = start + 1
+          e.target.style.height = 'auto'
+          e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
+        }, 0)
+      }
     }
   }
 
@@ -431,15 +654,41 @@ export default function Chat() {
     return groups
   }
 
-  const filteredChats = chatSearch
+  const filteredChats = chatSearch.trim()
       ? chats.filter(c => {
         const name = `${c.user?.userName || ''} ${c.user?.userSurname || ''}`.toLowerCase()
-        return name.includes(chatSearch.toLowerCase())
+        const lastMsg = (c.lastMessage || '').toLowerCase()
+        const query = chatSearch.toLowerCase()
+        return name.includes(query) || lastMsg.includes(query)
       })
       : chats
-  const totalUnread = chats.reduce((acc, c) => acc + (c.unreadCount || 0), 0)
+  const totalUnread = chats.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
 
-  // ── RENDER ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('unread-sync', { detail: totalUnread }));
+  }, [totalUnread]);
+
+  const messagesContainerRef = useRef(null)
+  useEffect(() => {
+    if (!messagesContainerRef.current || messagesLoading) return;
+
+    const container = messagesContainerRef.current;
+
+    const scrollToBottom = () => {
+      container.scrollTop = container.scrollHeight;
+    };
+
+    if (selectedChat && messages.length > 0 && !initialLoadDone) {
+      setTimeout(scrollToBottom, 50);
+      return;
+    }
+
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    if (isNearBottom && messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages, selectedChat, messagesLoading, initialLoadDone]);
+
   return (
       <>
         <style>{`
@@ -453,9 +702,12 @@ export default function Chat() {
           --input-padding: 12px 16px;
           --font-size-base: 14px;
           --touch-target: 44px;
-          --navbar-height: 48px;
+          /* --navbar-height берётся из index.css: 64px desktop / 48px mobile */
         }
-        html, body { overflow: hidden; height: 100%; margin: 0; padding: 0; }
+        /* Класс вешается на body только пока открыт Chat */
+        body.chat-page-active { overflow: hidden !important; touch-action: none !important; overscroll-behavior: none !important; }
+        .chat-list-panel { touch-action: pan-y; }
+        .chat-list-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; }
         @media (max-width: 1024px) {
           :root {
             --chat-sidebar-width: 280px;
@@ -478,16 +730,19 @@ export default function Chat() {
           .chat-list-panel {
             z-index: 100 !important;
             position: fixed !important;
-            top: var(--navbar-height) !important;
+            top: var(--chat-navbar-h, var(--navbar-height)) !important;
             left: 0 !important; right: 0 !important; bottom: 0 !important;
+            height: auto !important; /* сбрасываем инлайн height:100% — размер берётся из top+bottom */
             border-radius: 0 !important;
             transform: translateX(0) !important;
+            overscroll-behavior: contain !important;
           }
           .chat-window-panel {
             z-index: 99 !important;
             position: fixed !important;
-            top: var(--navbar-height) !important;
+            top: var(--chat-navbar-h, var(--navbar-height)) !important;
             left: 0 !important; right: 0 !important; bottom: 0 !important;
+            height: auto !important; /* то же самое */
             border-radius: 0 !important;
             transform: translateX(100%);
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -540,7 +795,10 @@ export default function Chat() {
       `}</style>
 
         <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <Navbar showLinks unreadMessages={totalUnread} />
+          {/* ref для замера реальной высоты — используется в CSS var --chat-navbar-h */}
+          <div ref={navbarRef} style={{ flexShrink: 0 }}>
+            <Navbar unreadMessages={totalUnread} spacer={false} isInChat />
+          </div>
           <Toast />
 
           <div className="chat-grid" style={{
@@ -556,7 +814,6 @@ export default function Chat() {
             minHeight: 0,
             overflow: 'hidden',
           }}>
-            {/* ══ ЛЕВАЯ ПАНЕЛЬ: Список чатов ══════════════════════════════════ */}
             <motion.div
                 initial={{ opacity: 0, x: -16 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -567,25 +824,104 @@ export default function Chat() {
                 }}
             >
               <div style={{ padding: 'var(--header-padding)', borderBottom: '1px solid rgba(90, 120, 255,0.1)' }}>
+                {/* Заголовок с кнопкой поиска */}
                 <div style={{
-                  fontSize: 18, fontWeight: 800, letterSpacing: '-0.3px', marginBottom: 0,
-                  display: 'flex', alignItems: 'center', gap: 8,
-                }} className="chat-header-title">
-                  <MessageCircle size={19} style={{ color: '#60A5FA' }} />
-                  Чаты
-                  {totalUnread > 0 && (
-                      <span style={{
-                        background: 'linear-gradient(135deg,#3B82F6,#6366F1)',
-                        color: '#fff', fontSize: 11, fontWeight: 700,
-                        borderRadius: 999, padding: '2px 7px', marginLeft: 2,
-                      }}>
-                    {totalUnread}
-                  </span>
-                  )}
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: showSearch ? 10 : 0,
+                }}>
+                  <div style={{
+                    fontSize: 18, fontWeight: 800, letterSpacing: '-0.3px',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }} className="chat-header-title">
+                    <MessageCircle size={19} style={{ color: '#60A5FA' }} />
+                    Чаты
+                    {totalUnread > 0 && (
+                        <span style={{
+                          background: 'linear-gradient(135deg,#3B82F6,#6366F1)',
+                          color: '#fff', fontSize: 11, fontWeight: 700,
+                          borderRadius: 999, padding: '2px 7px', marginLeft: 2,
+                        }}>
+        {totalUnread}
+      </span>
+                    )}
+                  </div>
+
+                  {/* Кнопка поиска */}
+                  <button
+                      onClick={() => {
+                        setShowSearch(!showSearch)
+                        if (showSearch) setChatSearch('')
+                      }}
+                      style={{
+                        width: 36, height: 36, borderRadius: '50%',
+                        background: showSearch ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.06)',
+                        border: 'none',
+                        color: showSearch ? '#60A5FA' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => {
+                        if (!showSearch) e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                      }}
+                      onMouseLeave={e => {
+                        if (!showSearch) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+                      }}
+                  >
+                    {showSearch ? <X size={18} /> : <Search size={18} />}
+                  </button>
                 </div>
+
+                {/* Поле поиска (показывается/скрывается) */}
+                {showSearch && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                      <div style={{ position: 'relative' }}>
+                        <Search size={16} style={{
+                          position: 'absolute', left: 12, top: '50%',
+                          transform: 'translateY(-50%)', color: 'var(--text-muted)',
+                          pointerEvents: 'none',
+                        }} />
+                        <input
+                            type="text"
+                            placeholder="Поиск по чатам..."
+                            value={chatSearch}
+                            onChange={e => setChatSearch(e.target.value)}
+                            autoFocus
+                            className="chat-search-input"
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px 10px 38px',
+                              borderRadius: 12,
+                              background: 'rgba(255,255,255,0.05)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              color: 'var(--text-primary)',
+                              fontSize: 14,
+                              fontFamily: 'Manrope, sans-serif',
+                              outline: 'none',
+                              transition: 'all 0.2s',
+                            }}
+                            onFocus={e => {
+                              e.target.style.background = 'rgba(59,130,246,0.08)'
+                              e.target.style.borderColor = 'rgba(96,165,250,0.4)'
+                            }}
+                            onBlur={e => {
+                              e.target.style.background = 'rgba(255,255,255,0.05)'
+                              e.target.style.borderColor = 'rgba(255,255,255,0.1)'
+                            }}
+                        />
+                      </div>
+                    </motion.div>
+                )}
               </div>
 
-              <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }} className="no-scrollbar">
+              <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, WebkitOverflowScrolling: 'touch', touchAction: 'pan-y', overscrollBehavior: 'contain' }} className="no-scrollbar chat-list-scroll">
                 {chatsLoading ? (
                     <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
                       <div style={{
@@ -673,7 +1009,7 @@ export default function Chat() {
               </div>
             </motion.div>
 
-            {/* ══ ПРАВАЯ ПАНЕЛЬ: Окно чата ════════════════════════════════════ */}
+
             <motion.div
                 initial={{ opacity: 0, x: 16 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -722,7 +1058,7 @@ export default function Chat() {
                       </div>
                     </div>
 
-                    <div style={{
+                    <div ref={messagesContainerRef} style={{
                       flex: 1, overflowY: 'auto', padding: '8px 0',
                       display: 'flex', flexDirection: 'column', minHeight: 0,
                     }} className="no-scrollbar">
@@ -775,7 +1111,7 @@ export default function Chat() {
                         </div>
                     )}
 
-                    {/* 🔧 КОНТЕЙНЕР ВВОДА — ИСПРАВЛЕН ДЛЯ МОБИЛЬНЫХ */}
+
                     <div style={{
                       padding: 'var(--input-padding)',
                       borderTop: '1px solid rgba(255,255,255,0.06)',
@@ -805,6 +1141,36 @@ export default function Chat() {
                       >
                         <Image size={18} />
                       </button>
+                      {/* Кнопка переноса строки — только на мобильных (touch-устройства) */}
+                      <button
+                          className="mobile-newline-btn"
+                          title="Новая строка"
+                          onClick={() => {
+                            const ta = textareaRef.current
+                            if (!ta) return
+                            const start = ta.selectionStart
+                            const end = ta.selectionEnd
+                            const newVal = text.slice(0, start) + '\n' + text.slice(end)
+                            setText(newVal)
+                            setTimeout(() => {
+                              ta.selectionStart = ta.selectionEnd = start + 1
+                              ta.style.height = 'auto'
+                              ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'
+                            }, 0)
+                          }}
+                          style={{
+                            width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                            color: 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.2s',
+                            display: 'none', // скрыто по умолчанию, показывается через CSS ниже
+                            fontSize: 16, fontWeight: 700,
+                          }}
+                      >
+                        ↵
+                      </button>
                       <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" multiple style={{ display: 'none' }} onChange={handleFileChange} />
 
                       <textarea
@@ -814,6 +1180,21 @@ export default function Chat() {
                           onKeyDown={handleKeyDown}
                           placeholder="Написать..."
                           rows={1}
+                          onPaste={e => {
+                            const items = e.clipboardData?.items
+                            if (!items) return
+                            for (const item of items) {
+                              if (item.type.startsWith('image/')) {
+                                e.preventDefault()
+                                const file = item.getAsFile()
+                                if (!file) return
+                                const { valid, error } = validateImageFile(file, 10)
+                                if (!valid) { toast(error); return }
+                                if (files.length >= 5) { toast('Максимум 5 файлов'); return }
+                                setFiles(prev => [...prev, file])
+                              }
+                            }
+                          }}
                           style={{
                             flex: 1, padding: '10px 14px', borderRadius: 14,
                             background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
@@ -824,7 +1205,7 @@ export default function Chat() {
                           onFocus={(e) => {
                             e.target.style.background = 'rgba(59,130,246,0.06)'
                             setTimeout(() => {
-                              e.target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              e.target.scrollIntoView({ behavior: 'smooth', block: 'end' })
                             }, 300)
                           }}
                           onBlur={e => { e.target.style.background = 'rgba(255,255,255,0.05)' }}
@@ -893,14 +1274,16 @@ export default function Chat() {
             </motion.div>
           </div>
 
-          {/* ══ МОДАЛЬНОЕ ОКНО ДЛЯ ПРОСМОТРА ИЗОБРАЖЕНИЙ ═══════════════════ */}
           <AnimatePresence>
             {selectedImage && (
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    onClick={() => { setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                    onClick={() => {
+                      setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
+                      touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
+                    }}
                     style={{
                       position: 'fixed',
                       inset: 0,
@@ -916,7 +1299,10 @@ export default function Chat() {
                 >
                   {/* Кнопка закрытия ✨ добавлен drop-shadow для иконки */}
                   <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                      onClick={(e) => {
+                        e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
+                        touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
+                      }}
                       style={{
                         position: 'absolute',
                         top: 20,
@@ -1028,6 +1414,7 @@ export default function Chat() {
 
                   {/* Изображение с zoom и drag */}
                   <motion.img
+                      ref={imgRef}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
@@ -1039,19 +1426,18 @@ export default function Chat() {
                           setSelectedImage(null)
                           setScale(1)
                           setPosition({ x: 0, y: 0 })
+                          touchStateRef.current = { lastDist: 0, lastScale: 1, lastPos: { x: 0, y: 0 }, touches: [] }
                         }
                       }}
                       onDoubleClick={(e) => {
                         e.stopPropagation()
-                        setScale(s => s < 1 ? 1 : s + 0.5)
+                        setScale(s => s > 1 ? 1 : 2.5)
+                        setPosition({ x: 0, y: 0 })
                       }}
                       onWheel={(e) => {
                         e.stopPropagation()
-                        const delta = e.deltaY > 0 ? -0.1 : 0.1
-                        setScale(s => {
-                          const newScale = Math.max(0.5, Math.min(5, s + delta))
-                          return newScale
-                        })
+                        const delta = e.deltaY > 0 ? -0.15 : 0.15
+                        setScale(s => Math.max(0.5, Math.min(5, s + delta)))
                       }}
                       style={{
                         maxWidth: '90vw',
@@ -1061,9 +1447,10 @@ export default function Chat() {
                         boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
                         cursor: scale > 1 ? 'grab' : 'zoom-out',
                         transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
-                        transition: scale === 1 ? 'transform 0.3s ease' : 'none',
+                        transition: isDragging ? 'none' : scale === 1 ? 'transform 0.3s ease' : 'none',
                         userSelect: 'none',
-                        touchAction: 'pan-x pan-y',
+                        touchAction: 'none',
+                        WebkitUserSelect: 'none',
                       }}
                       onMouseDown={(e) => {
                         if (scale <= 1) return
@@ -1075,13 +1462,13 @@ export default function Chat() {
                         if (!isDragging || scale <= 1) return
                         e.preventDefault()
                         setPosition({
-                          x: (e.clientX - dragStart.x) / scale,
-                          y: (e.clientY - dragStart.y) / scale,
+                          x: (e.clientX - dragStart.x),
+                          y: (e.clientY - dragStart.y),
                         })
                       }}
                       onMouseUp={(e) => {
                         setIsDragging(false)
-                        e.currentTarget.style.cursor = 'grab'
+                        e.currentTarget.style.cursor = scale > 1 ? 'grab' : 'zoom-out'
                       }}
                       onMouseLeave={() => setIsDragging(false)}
                   />

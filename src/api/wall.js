@@ -1,7 +1,10 @@
 import api from './axios'
 
 export async function getWallPosts({ offset = 0, limit = 20 } = {}) {
-  const res = await api.get('/wall/GetPosts', { params: { offset, limit } })
+  const res = await api.get('/wall/GetPosts', {
+    params: { offset, limit },
+    _isPublicRequest: true
+  })
   return res.data
 }
 

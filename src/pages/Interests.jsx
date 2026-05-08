@@ -26,7 +26,6 @@ export default function Interests() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
-    // 🔹 1. Загрузка всех категорий и тегов
     useEffect(() => {
         async function load() {
             setLoading(true)
@@ -53,14 +52,12 @@ export default function Interests() {
         load()
     }, [])
 
-    // 🔹 2. Загрузка уже выбранных интересов пользователя
     useEffect(() => {
         if (!user?.userId || allTags.length === 0) return
 
         async function loadUserTags() {
             try {
                 const userTags = await getUserTags(user.userId)
-                // Извлекаем только ID тегов и устанавливаем их как выбранные
                 const tagIds = (userTags || []).map(t => t.tagId ?? t.TagId).filter(Boolean)
                 setSelected(tagIds)
             } catch (err) {
@@ -76,7 +73,6 @@ export default function Interests() {
         )
     }
 
-    // 🔹 3. Сброс выбора
     function handleReset() {
         setSelected([])
         toast('Выбор сброшен')
@@ -113,7 +109,7 @@ export default function Interests() {
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <Navbar showLinks />
+            <Navbar />
             <Toast />
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '32px 24px' }}>

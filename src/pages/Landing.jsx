@@ -15,7 +15,6 @@ const floaters = [
 
 export default function Landing() {
     const navigate = useNavigate()
-    const { isAuthenticated } = useAuth()
     const [isMobile, setIsMobile] = useState(false)
 
     useEffect(() => {
@@ -29,7 +28,7 @@ export default function Landing() {
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
 
             {/* Navbar скрываем на мобиле */}
-            <Navbar showLinks={isAuthenticated} />
+            <Navbar />
 
             <div
                 style={{

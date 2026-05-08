@@ -18,8 +18,6 @@ function getTagColor(name) {
     return TAG_COLORS[sum % TAG_COLORS.length]
 }
 
-const PAGE_SIZE = 10
-
 export default function Search() {
     const navigate = useNavigate()
 
@@ -31,7 +29,6 @@ export default function Search() {
     const [activeFilters, setActiveFilters] = useState({})
     const [searchLoading, setSearchLoading] = useState(true)
     const [query, setQuery] = useState('')
-    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
     const [loadingMore, setLoadingMore] = useState(false)
     const loaderRef = useRef(null)
     const [incomingPendingIds, setIncomingPendingIds] = useState(new Set())
@@ -71,7 +68,6 @@ export default function Search() {
                 if (entries[0].isIntersecting && !loadingMore) {
                     setLoadingMore(true)
                     setTimeout(() => {
-                        setVisibleCount(prev => prev + PAGE_SIZE)
                         setLoadingMore(false)
                     }, 300)
                 }
@@ -85,7 +81,6 @@ export default function Search() {
     const handleApply = useCallback(async (checkedTagIds) => {
         setActiveFilters(checkedTagIds)
         setSearchLoading(true)
-        setVisibleCount(PAGE_SIZE)
         try {
             const ids = Object.keys(checkedTagIds).filter(k => checkedTagIds[k]).map(Number)
             const results = await searchByUserTags(ids)
@@ -128,8 +123,6 @@ export default function Search() {
         })
         : people
 
-    const visible = filtered.slice(0, visibleCount)
-    const hasMore = visibleCount < filtered.length
     const appliedTagIds = Object.keys(activeFilters).filter(k => activeFilters[k])
 
     function getTagName(tagId) {
@@ -139,7 +132,7 @@ export default function Search() {
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <Navbar showLinks />
+            <Navbar />
             <Toast />
 
             <FilterPanel
@@ -167,7 +160,7 @@ export default function Search() {
                             style={{ paddingLeft: 46, fontSize: 15 }}
                             placeholder="Поиск по имени..."
                             value={query}
-                            onChange={e => { setQuery(e.target.value); setVisibleCount(PAGE_SIZE) }}
+                            onChange={e => { setQuery(e.target.value) }}
                         />
                     </motion.div>
 
@@ -247,7 +240,7 @@ export default function Search() {
                                 animate="visible"
                                 variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
                             >
-                                {visible.map(person => (
+                                {filtered.map(person => (
                                     <motion.div
                                         key={person.userId}
                                         variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0 } }}
@@ -262,7 +255,7 @@ export default function Search() {
                                 ))}
 
                                 {/* Infinite scroll trigger */}
-                                {hasMore && (
+                                {(
                                     <div ref={loaderRef} style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
                                         {loadingMore && (
                                             <motion.div
