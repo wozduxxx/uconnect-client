@@ -574,6 +574,10 @@ export default function Chat() {
     setText('')
     setFiles([])
 
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
+
     try {
       await sendMessage({
         receiverId: selectedChat.interlocutorId,

@@ -62,18 +62,18 @@ function renderTextWithLinks(text) {
 function Avatar({ user, size = 40, onClick }) {
   const url = resolveAvatarUrl(user?.avatarUrl)
   return (
-    <div onClick={onClick} style={{
-      width: size, height: size, borderRadius: '50%', flexShrink: 0,
-      background: 'linear-gradient(135deg,#3B82F6,#6366F1)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.35, fontWeight: 700, color: '#fff',
-      overflow: 'hidden', cursor: onClick ? 'pointer' : 'default',
-    }}>
-      {url
-        ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        : getInitials(user?.userName, user?.userSurname)
-      }
-    </div>
+      <div onClick={onClick} style={{
+        width: size, height: size, borderRadius: '50%', flexShrink: 0,
+        background: 'linear-gradient(135deg,#3B82F6,#6366F1)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.35, fontWeight: 700, color: '#fff',
+        overflow: 'hidden', cursor: onClick ? 'pointer' : 'default',
+      }}>
+        {url
+            ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : getInitials(user?.userName, user?.userSurname)
+        }
+      </div>
   )
 }
 
@@ -108,6 +108,11 @@ function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
   useEffect(() => { load(true) }, [postId])
 
   async function handleSend() {
+    if (!currentUser) {
+      toast('Войдите в аккаунт, чтобы оставить комментарий')
+      navigate('/login')
+      return
+    }
     if (!text.trim()) return
     setSending(true)
     try {
@@ -164,111 +169,111 @@ function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
 
   if (!loaded && loading) {
     return (
-      <div style={{ padding: '12px 18px', display: 'flex', justifyContent: 'center' }}>
-        <Loader2 size={18} style={{ animation: 'spin 0.7s linear infinite', color: 'var(--text-muted)' }} />
-      </div>
+        <div style={{ padding: '12px 18px', display: 'flex', justifyContent: 'center' }}>
+          <Loader2 size={18} style={{ animation: 'spin 0.7s linear infinite', color: 'var(--text-muted)' }} />
+        </div>
     )
   }
 
   return (
-    <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 2 }}>
-      {/* Список */}
-      <AnimatePresence initial={false}>
-        {comments.map(c => (
-            <motion.div
-                key={c.commentId}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, height: 0 }}
-                style={{
-                  display: 'flex',
-                  gap: 10,
-                  padding: '10px 18px',
-                  alignItems: 'flex-start',
-                  marginBottom: 5,
-                  borderBottom: '1px solid rgba(0,0,0,0.1)',
-                }}
-            >
-              <Avatar
-                  user={c.user}
-                  size={32}
-                  onClick={() => navigate(`/profile?id=${c.user?.userId}`)}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Имя пользователя */}
-                <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'inline-block'
-                    }}
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 2 }}>
+        {/* Список */}
+        <AnimatePresence initial={false}>
+          {comments.map(c => (
+              <motion.div
+                  key={c.commentId}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, height: 0 }}
+                  style={{
+                    display: 'flex',
+                    gap: 10,
+                    padding: '10px 18px',
+                    alignItems: 'flex-start',
+                    marginBottom: 5,
+                    borderBottom: '1px solid rgba(0,0,0,0.1)',
+                  }}
+              >
+                <Avatar
+                    user={c.user}
+                    size={32}
                     onClick={() => navigate(`/profile?id=${c.user?.userId}`)}
-                >
-                  {[c.user?.userName, c.user?.userSurname].filter(Boolean).join(' ') || 'Пользователь'}
-                </div>
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* Имя пользователя */}
+                  <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-block'
+                      }}
+                      onClick={() => navigate(`/profile?id=${c.user?.userId}`)}
+                  >
+                    {[c.user?.userName, c.user?.userSurname].filter(Boolean).join(' ') || 'Пользователь'}
+                  </div>
 
-                {/* Текст комментария */}
-                <div style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  borderRadius: '4px 14px 14px 14px',
-                  padding: '8px 0',
-                  border: '1px solid rgba(255,255,255,0.07)',
-                  marginBottom: 6,
-                }}>
-                  <div style={{ fontSize: 14, lineHeight: 1.5, wordBreak: 'break-word' }}>
-                    {renderTextWithLinks(c.text)}
+                  {/* Текст комментария */}
+                  <div style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '4px 14px 14px 14px',
+                    padding: '8px 0',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    marginBottom: 6,
+                  }}>
+                    <div style={{ fontSize: 14, lineHeight: 1.5, wordBreak: 'break-word' }}>
+                      {renderTextWithLinks(c.text)}
+                    </div>
+                  </div>
+
+                  {/* Время */}
+                  <div style={{
+                    fontSize: 11,
+                    color: 'var(--text-muted)',
+                  }}>
+                    {formatRelativeTime(c.createdAt)}
                   </div>
                 </div>
 
-                {/* Время */}
-                <div style={{
-                  fontSize: 11,
-                  color: 'var(--text-muted)',
-                }}>
-                  {formatRelativeTime(c.createdAt)}
-                </div>
-              </div>
+                {c.userId === currentUser?.userId && (
+                    <button onClick={() => handleDelete(c.commentId)} style={{
+                      background: 'none', border: 'none', color: 'var(--text-muted)',
+                      cursor: 'pointer', padding: 4, marginTop: 8, flexShrink: 0,
+                      borderRadius: 6, transition: 'color 0.15s',
+                    }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#F87171'}
+                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                )}
+              </motion.div>
+          ))}
+        </AnimatePresence>
 
-            {c.userId === currentUser?.userId && (
-              <button onClick={() => handleDelete(c.commentId)} style={{
-                background: 'none', border: 'none', color: 'var(--text-muted)',
-                cursor: 'pointer', padding: 4, marginTop: 8, flexShrink: 0,
-                borderRadius: 6, transition: 'color 0.15s',
-              }}
-                onMouseEnter={e => e.currentTarget.style.color = '#F87171'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-              >
-                <Trash2 size={13} />
-              </button>
-            )}
-          </motion.div>
-        ))}
-      </AnimatePresence>
+        {/* Загрузить ещё */}
+        {hasMore && (
+            <button onClick={() => load(false)} disabled={loading} style={{
+              display: 'flex', alignItems: 'center', gap: 5, margin: '4px 18px 8px',
+              background: 'none', border: 'none', color: '#60A5FA', fontSize: 13,
+              fontWeight: 600, cursor: 'pointer', fontFamily: 'Manrope,sans-serif',
+              padding: 0,
+            }}>
+              {loading ? <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> : <ChevronDown size={13} />}
+              Загрузить ещё
+            </button>
+        )}
 
-      {/* Загрузить ещё */}
-      {hasMore && (
-        <button onClick={() => load(false)} disabled={loading} style={{
-          display: 'flex', alignItems: 'center', gap: 5, margin: '4px 18px 8px',
-          background: 'none', border: 'none', color: '#60A5FA', fontSize: 13,
-          fontWeight: 600, cursor: 'pointer', fontFamily: 'Manrope,sans-serif',
-          padding: 0,
-        }}>
-          {loading ? <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> : <ChevronDown size={13} />}
-          Загрузить ещё
-        </button>
-      )}
-
-      {/* Ввод */}
-      <div style={{ display: 'flex', gap: 10, padding: '10px 18px 14px', alignItems: 'flex-start' }}>
-        <Avatar user={currentUser} size={32} />
-        <div style={{
-          flex: 1, display: 'flex', alignItems: 'flex-start', gap: 8,
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 999, padding: '8px 8px 8px 14px',
-          transition: 'all 0.2s',
-        }}>
+        {/* Ввод */}
+        <div style={{ display: 'flex', gap: 10, padding: '10px 18px 14px', alignItems: 'flex-start' }}>
+          <Avatar user={currentUser} size={32} />
+          <div style={{
+            flex: 1, display: 'flex', alignItems: 'flex-start', gap: 8,
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 999, padding: '8px 8px 8px 14px',
+            transition: 'all 0.2s',
+          }}>
     <textarea
         ref={commentTextareaRef}
         value={text}
@@ -289,22 +294,22 @@ function CommentsSection({ postId, currentUser, initialCount, onCountChange }) {
           e.target.style.height = Math.min(e.target.scrollHeight, 80) + 'px';
         }}
     />
-          <button onClick={handleSend} disabled={!text.trim() || sending} style={{
-            width: 30, height: 30, borderRadius: '50%', border: 'none',
-            background: text.trim() && !sending ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(255,255,255,0.06)',
-            color: text.trim() && !sending ? '#fff' : 'var(--text-muted)',
-            cursor: text.trim() && !sending ? 'pointer' : 'not-allowed',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, transition: 'all 0.2s', marginTop: 2
-          }}>
-            {sending
-                ? <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} />
-                : <Send size={13} style={{ marginLeft: 1 }} />
-            }
-          </button>
+            <button onClick={handleSend} disabled={!text.trim() || sending} style={{
+              width: 30, height: 30, borderRadius: '50%', border: 'none',
+              background: text.trim() && !sending ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(255,255,255,0.06)',
+              color: text.trim() && !sending ? '#fff' : 'var(--text-muted)',
+              cursor: text.trim() && !sending ? 'pointer' : 'not-allowed',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, transition: 'all 0.2s', marginTop: 2
+            }}>
+              {sending
+                  ? <Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} />
+                  : <Send size={13} style={{ marginLeft: 1 }} />
+              }
+            </button>
+          </div>
         </div>
       </div>
-    </div>
   )
 }
 
@@ -323,7 +328,17 @@ export const WallPost = forwardRef(function WallPost({ post: initialPost, curren
   const name = [post.user?.userName, post.user?.userSurname].filter(Boolean).join(' ') || 'Пользователь'
   const isOwn = (post.userId ?? post.user?.userId) === currentUserId
 
+  function requireAuth(action) {
+    if (!currentUserId) {
+      toast('Войдите в аккаунт, чтобы продолжить')
+      navigate('/login')
+      return false
+    }
+    return true
+  }
+
   async function handleLike() {
+    if (!requireAuth()) return
     if (liking) return
     setLiking(true)
 
@@ -443,7 +458,7 @@ export const WallPost = forwardRef(function WallPost({ post: initialPost, curren
           </button>
 
           {/* Комментарии */}
-          <button onClick={() => setShowComments(v => !v)} style={{
+          <button onClick={() => { if (requireAuth()) setShowComments(v => !v) }} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '7px 12px', borderRadius: 999, border: 'none',
             background: showComments ? 'rgba(59,130,246,0.1)' : 'transparent',
@@ -605,7 +620,7 @@ export function ComposeBox({ currentUser, onPost }) {
                 <Image size={15} />
                 <span className="wall-btn-label ">Фото </span>
               </button>
-              <input ref={fileRef} type="file " accept="image/jpeg,image/png,image/webp " style={{ display: 'none' }} onChange={handleFileChange} />
+              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={handleFileChange} />
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button onClick={handleSend} disabled={!canSend} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 20px', borderRadius: 999, border: 'none', background: canSend ? 'linear-gradient(135deg,#3B82F6,#6366F1)' : 'rgba(255,255,255,0.06)', color: canSend ? '#fff' : 'var(--text-muted)', fontSize: 14, fontWeight: 700, cursor: canSend ? 'pointer' : 'not-allowed', fontFamily: 'Manrope,sans-serif', transition: 'all 0.2s', boxShadow:  canSend ? '0 4px 16px rgba(59,130,246,0.35)' : 'none' }} onMouseEnter={e => { if (canSend) e.currentTarget.style.transform = 'translateY(-1px)' }} onMouseLeave={e => { e.currentTarget.style.transform = '' }}>
@@ -623,17 +638,17 @@ export function ComposeBox({ currentUser, onPost }) {
 
 export function PostSkeleton() {
   return (
-    <div className="glass" style={{ borderRadius: 20, padding: '16px 18px', marginBottom: 14 }}>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', animation: 'pulse 1.4s ease-in-out infinite' }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ height: 14, width: '40%', borderRadius: 6, background: 'rgba(255,255,255,0.07)', marginBottom: 6, animation: 'pulse 1.4s ease-in-out infinite' }} />
-          <div style={{ height: 11, width: '25%', borderRadius: 6, background: 'rgba(255,255,255,0.05)', animation: 'pulse 1.4s ease-in-out infinite' }} />
+      <div className="glass" style={{ borderRadius: 20, padding: '16px 18px', marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', animation: 'pulse 1.4s ease-in-out infinite' }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ height: 14, width: '40%', borderRadius: 6, background: 'rgba(255,255,255,0.07)', marginBottom: 6, animation: 'pulse 1.4s ease-in-out infinite' }} />
+            <div style={{ height: 11, width: '25%', borderRadius: 6, background: 'rgba(255,255,255,0.05)', animation: 'pulse 1.4s ease-in-out infinite' }} />
+          </div>
         </div>
+        <div style={{ height: 14, width: '90%', borderRadius: 6, background: 'rgba(255,255,255,0.07)', marginBottom: 8, animation: 'pulse 1.4s ease-in-out infinite' }} />
+        <div style={{ height: 14, width: '70%', borderRadius: 6, background: 'rgba(255,255,255,0.05)', animation: 'pulse 1.4s ease-in-out infinite' }} />
       </div>
-      <div style={{ height: 14, width: '90%', borderRadius: 6, background: 'rgba(255,255,255,0.07)', marginBottom: 8, animation: 'pulse 1.4s ease-in-out infinite' }} />
-      <div style={{ height: 14, width: '70%', borderRadius: 6, background: 'rgba(255,255,255,0.05)', animation: 'pulse 1.4s ease-in-out infinite' }} />
-    </div>
   )
 }
 
@@ -662,6 +677,16 @@ export default function Wall() {
   useEffect(() => {
     fetchPosts(true)
   }, [])
+
+  // Мягкий редирект при истёкшей сессии (вместо window.location.href в axios)
+  useEffect(() => {
+    function handleAuthExpired() {
+      toast('Сессия истекла. Пожалуйста, войдите снова.')
+      navigate('/login')
+    }
+    window.addEventListener('auth:expired', handleAuthExpired)
+    return () => window.removeEventListener('auth:expired', handleAuthExpired)
+  }, [navigate])
 
   useEffect(() => {
     if (!selectedImage) return
@@ -840,294 +865,299 @@ export default function Wall() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Navbar />
-      <Toast />
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <Navbar />
+        <Toast />
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 16px 60px' }}>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 16px 60px' }}>
 
-          {/* Заголовок */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}
-          >
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: 12,
-                  background: 'linear-gradient(135deg,#3B82F6,#6366F1)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Globe size={16} style={{ color: '#fff' }} />
-                </div>
-                <h1 style={{ fontSize: 24, fontWeight: 900, letterSpacing: '-0.5px', margin: 0 }}>Стенка</h1>
-              </div>
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, marginLeft: 2, marginTop: 3 }}>
-                Делитесь мыслями со всеми
-              </p>
-            </div>
-            <button onClick={handleRefresh} disabled={refreshing} style={{
-              width: 38, height: 38, borderRadius: '50%', border: 'none',
-              background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'all 0.2s',
-            }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-              title="Обновить ленту"
-            >
-              <RefreshCw size={16} style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }} />
-            </button>
-          </motion.div>
-
-          {/* Compose */}
-          {user && <ComposeBox currentUser={user} onPost={handlePost} />}
-
-          {/* Скелетоны */}
-          {loading && [1, 2, 3].map(i => <PostSkeleton key={i} />)}
-
-          {/* Пусто */}
-          {!loading && posts.length === 0 && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-secondary)' }}>
-              <div style={{ fontSize: 48, marginBottom: 14 }}>🌐</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Стенка пуста</div>
-              <div style={{ fontSize: 14, opacity: 0.7 }}>Будьте первым — напишите что-нибудь!</div>
-            </motion.div>
-          )}
-
-          {/* Лента */}
-          {!loading && (
-            <AnimatePresence mode="popLayout">
-              {posts.map(post => (
-                <WallPost
-                  key={post.postId}
-                  post={post}
-                  currentUserId={user?.userId}
-                  currentUser={user}
-                  onDelete={handleDelete}
-                  onImageClick={setSelectedImage}
-                />
-              ))}
-            </AnimatePresence>
-          )}
-
-          {/* Infinite scroll anchor */}
-          {hasMore && !loading && (
-            <div ref={loaderRef} style={{ display: 'flex', justifyContent: 'center', padding: '20px 0', minHeight: 40 }}>
-              {loadingMore && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
-                  <Loader2 size={16} style={{ animation: 'spin 0.7s linear infinite' }} />
-                  Загрузка...
-                </motion.div>
-              )}
-            </div>
-          )}
-        </div>
-        {/* Модальное окно для просмотра изображений */}
-        {selectedImage && (
+            {/* Заголовок */}
             <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => {
-                  setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
-                  touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
-                }}
-                style={{
-                  position: 'fixed',
-                  inset: 0,
-                  background: 'rgba(0,0,0,0.77)',
-                  zIndex: 9999,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: 20,
-                  cursor: scale > 1 ? 'grab' : 'zoom-out',
-                  overflow: 'hidden',
-                }}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}
             >
-              <button
-                  onClick={(e) => {
-                    e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
-                    touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: 20,
-                    right: 20,
-                    width: 44,
-                    height: 44,
-                    borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(0,0,0,0.2)', /* ✨ лёгкая рамка для структуры */
-                    color: '#fff',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 10000,
-                    backdropFilter: 'blur(10px)',
-                    filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.9))', /* ✨ чёрная обводка */
-                  }}
-              >
-                <X size={24} />
-              </button>
-
-              <div style={{
-                position: 'absolute',
-                bottom: 30,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                display: 'flex',
-                gap: 10,
-                zIndex: 10000,
-                background: 'rgba(255,255,255,0.1)',
-                padding: '8px 12px',
-                borderRadius: 999,
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(0,0,0,0.2)', /* ✨ рамка панели */
-                filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.8))', /* ✨ обводка всей панели */
-              }}>
-                <button
-                    onClick={(e) => { e.stopPropagation(); setScale(s => Math.max(0.5, s - 0.25)) }}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: '50%',
-                      border: 'none',
-                      background: 'rgba(255,255,255,0.15)',
-                      color: '#fff',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 20,
-                      fontWeight: 700,
-                      textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка текста */
-                    }}
-                >
-                  −
-                </button>
-                <span style={{
-                  color: '#fff',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  minWidth: 50,
-                  justifyContent: 'center',
-                  textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка процентов */
-                }}>
-                {Math.round(scale * 100)}%
-            </span>
-                <button
-                    onClick={(e) => { e.stopPropagation(); setScale(s => Math.min(5, s + 0.25)) }}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: '50%',
-                      border: 'none',
-                      background: 'rgba(255,255,255,0.15)',
-                      color: '#fff',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 20,
-                      fontWeight: 700,
-                      textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка текста */
-                    }}
-                >
-                  +
-                </button>
-                <button
-                    onClick={(e) => { e.stopPropagation(); setScale(1); setPosition({ x: 0, y: 0 }) }}
-                    style={{
-                      padding: '0 12px',
-                      height: 36,
-                      borderRadius: 999,
-                      border: 'none',
-                      background: 'rgba(255,255,255,0.15)',
-                      color: '#fff',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      textShadow: '0 0 4px rgba(0,0,0,0.9)', /* ✨ обводка текста */
-                    }}
-                >
-                  Сброс
-                </button>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 12,
+                    background: 'linear-gradient(135deg,#3B82F6,#6366F1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Globe size={16} style={{ color: '#fff' }} />
+                  </div>
+                  <h1 style={{ fontSize: 24, fontWeight: 900, letterSpacing: '-0.5px', margin: 0 }}>Стенка</h1>
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, marginLeft: 2, marginTop: 3 }}>
+                  Делитесь мыслями со всеми
+                </p>
               </div>
+              <button onClick={handleRefresh} disabled={refreshing} style={{
+                width: 38, height: 38, borderRadius: '50%', border: 'none',
+                background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.2s',
+              }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+                      title="Обновить ленту"
+              >
+                <RefreshCw size={16} style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }} />
+              </button>
+            </motion.div>
 
-              {/* Изображение с zoom и drag */}
-              <motion.img
-                  ref={imgRef}
+            {/* Compose */}
+            {user ? <ComposeBox currentUser={user} onPost={handlePost} /> :
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', paddingLeft: 2, paddingBottom: 22 }}>
+                  <span onClick={() => navigate('/login')}
+                        style={{ color: '#60A5FA', cursor: 'pointer', fontWeight: 600 }}> Войдите </span> чтобы создать свой пост
+                </p>
+            }
+
+            {/* Скелетоны */}
+            {loading && [1, 2, 3].map(i => <PostSkeleton key={i} />)}
+
+            {/* Пусто */}
+            {!loading && posts.length === 0 && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                            style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-secondary)' }}>
+                  <div style={{ fontSize: 48, marginBottom: 14 }}>🌐</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Стенка пуста</div>
+                  <div style={{ fontSize: 14, opacity: 0.7 }}>Будьте первым — напишите что-нибудь!</div>
+                </motion.div>
+            )}
+
+            {/* Лента */}
+            {!loading && (
+                <AnimatePresence mode="popLayout">
+                  {posts.map(post => (
+                      <WallPost
+                          key={post.postId}
+                          post={post}
+                          currentUserId={user?.userId}
+                          currentUser={user}
+                          onDelete={handleDelete}
+                          onImageClick={setSelectedImage}
+                      />
+                  ))}
+                </AnimatePresence>
+            )}
+
+            {/* Infinite scroll anchor */}
+            {hasMore && !loading && (
+                <div ref={loaderRef} style={{ display: 'flex', justifyContent: 'center', padding: '20px 0', minHeight: 40 }}>
+                  {loadingMore && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontSize: 13 }}>
+                        <Loader2 size={16} style={{ animation: 'spin 0.7s linear infinite' }} />
+                        Загрузка...
+                      </motion.div>
+                  )}
+                </div>
+            )}
+          </div>
+          {/* Модальное окно для просмотра изображений */}
+          {selectedImage && (
+              <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  src={selectedImage}
-                  alt="Full size"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (scale <= 1) {
-                      setSelectedImage(null)
-                      setScale(1)
-                      setPosition({ x: 0, y: 0 })
-                      touchStateRef.current = { lastDist: 0, lastScale: 1, lastPos: { x: 0, y: 0 }, touches: [] }
-                    }
-                  }}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation()
-                    setScale(s => s > 1 ? 1 : 2.5)
-                    setPosition({ x: 0, y: 0 })
-                  }}
-                  onWheel={(e) => {
-                    e.stopPropagation()
-                    const delta = e.deltaY > 0 ? -0.15 : 0.15
-                    setScale(s => Math.max(0.5, Math.min(5, s + delta)))
+                  onClick={() => {
+                    setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
+                    touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
                   }}
                   style={{
-                    maxWidth: '90vw',
-                    maxHeight: '90vh',
-                    objectFit: 'contain',
-                    borderRadius: 12,
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                    position: 'fixed',
+                    inset: 0,
+                    background: 'rgba(0,0,0,0.77)',
+                    zIndex: 9999,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 20,
                     cursor: scale > 1 ? 'grab' : 'zoom-out',
-                    transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
-                    transition: isDragging ? 'none' : scale === 1 ? 'transform 0.3s ease' : 'none',
-                    userSelect: 'none',
-                    touchAction: 'none',
-                    WebkitUserSelect: 'none',
+                    overflow: 'hidden',
                   }}
-                  onMouseDown={(e) => {
-                    if (scale <= 1) return
-                    setIsDragging(true)
-                    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y })
-                    e.currentTarget.style.cursor = 'grabbing'
-                  }}
-                  onMouseMove={(e) => {
-                    if (!isDragging || scale <= 1) return
-                    e.preventDefault()
-                    setPosition({
-                      x: (e.clientX - dragStart.x),
-                      y: (e.clientY - dragStart.y),
-                    })
-                  }}
-                  onMouseUp={(e) => {
-                    setIsDragging(false)
-                    e.currentTarget.style.cursor = scale > 1 ? 'grab' : 'zoom-out'
-                  }}
-                  onMouseLeave={() => setIsDragging(false)}
-              />
-            </motion.div>
-        )}
-      </div>
+              >
+                <button
+                    onClick={(e) => {
+                      e.stopPropagation(); setSelectedImage(null); setScale(1); setPosition({ x: 0, y: 0 })
+                      touchStateRef.current = { lastDist: 0, lastScaleOnStart: 1, currentScale: 1, currentPos: { x: 0, y: 0 } }
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: 20,
+                      right: 20,
+                      width: 44,
+                      height: 44,
+                      borderRadius: '50%',
+                      background: 'rgba(255,255,255,0.1)',
+                      border: '1px solid rgba(0,0,0,0.2)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 10000,
+                      backdropFilter: 'blur(10px)',
+                      filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.9))',
+                    }}
+                >
+                  <X size={24} />
+                </button>
 
-      <style>{`
+                <div style={{
+                  position: 'absolute',
+                  bottom: 30,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  display: 'flex',
+                  gap: 10,
+                  zIndex: 10000,
+                  background: 'rgba(255,255,255,0.1)',
+                  padding: '8px 12px',
+                  borderRadius: 999,
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(0,0,0,0.2)',
+                  filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.8))',
+                }}>
+                  <button
+                      onClick={(e) => { e.stopPropagation(); setScale(s => Math.max(0.5, s - 0.25)) }}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: 'rgba(255,255,255,0.15)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 20,
+                        fontWeight: 700,
+                        textShadow: '0 0 4px rgba(0,0,0,0.9)',
+                      }}
+                  >
+                    −
+                  </button>
+                  <span style={{
+                    color: '#fff',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    minWidth: 50,
+                    justifyContent: 'center',
+                    textShadow: '0 0 4px rgba(0,0,0,0.9)',
+                  }}>
+                {Math.round(scale * 100)}%
+            </span>
+                  <button
+                      onClick={(e) => { e.stopPropagation(); setScale(s => Math.min(5, s + 0.25)) }}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: '50%',
+                        border: 'none',
+                        background: 'rgba(255,255,255,0.15)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 20,
+                        fontWeight: 700,
+                        textShadow: '0 0 4px rgba(0,0,0,0.9)',
+                      }}
+                  >
+                    +
+                  </button>
+                  <button
+                      onClick={(e) => { e.stopPropagation(); setScale(1); setPosition({ x: 0, y: 0 }) }}
+                      style={{
+                        padding: '0 12px',
+                        height: 36,
+                        borderRadius: 999,
+                        border: 'none',
+                        background: 'rgba(255,255,255,0.15)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textShadow: '0 0 4px rgba(0,0,0,0.9)',
+                      }}
+                  >
+                    Сброс
+                  </button>
+                </div>
+
+                {/* Изображение с zoom и drag */}
+                <motion.img
+                    ref={imgRef}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    src={selectedImage}
+                    alt="Full size"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (scale <= 1) {
+                        setSelectedImage(null)
+                        setScale(1)
+                        setPosition({ x: 0, y: 0 })
+                        touchStateRef.current = { lastDist: 0, lastScale: 1, lastPos: { x: 0, y: 0 }, touches: [] }
+                      }
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation()
+                      setScale(s => s > 1 ? 1 : 2.5)
+                      setPosition({ x: 0, y: 0 })
+                    }}
+                    onWheel={(e) => {
+                      e.stopPropagation()
+                      const delta = e.deltaY > 0 ? -0.15 : 0.15
+                      setScale(s => Math.max(0.5, Math.min(5, s + delta)))
+                    }}
+                    style={{
+                      maxWidth: '90vw',
+                      maxHeight: '90vh',
+                      objectFit: 'contain',
+                      borderRadius: 12,
+                      boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                      cursor: scale > 1 ? 'grab' : 'zoom-out',
+                      transform: `scale(${scale}) translate(${position.x}px, ${position.y}px)`,
+                      transition: isDragging ? 'none' : scale === 1 ? 'transform 0.3s ease' : 'none',
+                      userSelect: 'none',
+                      touchAction: 'none',
+                      WebkitUserSelect: 'none',
+                    }}
+                    onMouseDown={(e) => {
+                      if (scale <= 1) return
+                      setIsDragging(true)
+                      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y })
+                      e.currentTarget.style.cursor = 'grabbing'
+                    }}
+                    onMouseMove={(e) => {
+                      if (!isDragging || scale <= 1) return
+                      e.preventDefault()
+                      setPosition({
+                        x: (e.clientX - dragStart.x),
+                        y: (e.clientY - dragStart.y),
+                      })
+                    }}
+                    onMouseUp={(e) => {
+                      setIsDragging(false)
+                      e.currentTarget.style.cursor = scale > 1 ? 'grab' : 'zoom-out'
+                    }}
+                    onMouseLeave={() => setIsDragging(false)}
+                />
+              </motion.div>
+          )}
+        </div>
+
+        <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
         @media (max-width: 480px) {
@@ -1135,6 +1165,6 @@ export default function Wall() {
           .wall-btn-label { display: none; }
         }
       `}</style>
-    </div>
+      </div>
   )
 }

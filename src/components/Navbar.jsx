@@ -146,6 +146,7 @@ export default function Navbar({ unreadMessages = 0, spacer = true, isInChat = f
     ]
 
     const guestNavItems = [
+        { label: 'Стенка', path: '/wall' },
 
     ]
 

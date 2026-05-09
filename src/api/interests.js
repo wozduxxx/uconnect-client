@@ -25,8 +25,12 @@ export async function addTags(tags) {
  *                           если пустой → поиск по тегам текущего пользователя
  * @returns {Promise<Array<{ userId: number, userName: string, userSurname: string, avatarUrl: string, count: number }>>}
  */
-export async function searchByUserTags(tagsId = []) {
-  const res = await api.post('/interests/searchByUserTags', { tagsId })
+export async function searchByUserTags(tagsId = [], { offset = 0, limit = 20 } = {}) {
+  const res = await api.post('/interests/searchByUserTags', {
+    tagsId,
+    offset: offset,
+    limit: limit
+  })
   return res.data
 }
 

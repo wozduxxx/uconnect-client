@@ -29,8 +29,11 @@ export default function Search() {
     const [activeFilters, setActiveFilters] = useState({})
     const [searchLoading, setSearchLoading] = useState(true)
     const [query, setQuery] = useState('')
+    const [skip, setSkip] = useState(0)
+    const [hasMore, setHasMore] = useState(true)
     const [loadingMore, setLoadingMore] = useState(false)
     const loaderRef = useRef(null)
+    const SEARCH_LIMIT = 20
     const [incomingPendingIds, setIncomingPendingIds] = useState(new Set())
 
     useEffect(() => {
@@ -47,7 +50,6 @@ export default function Search() {
                 setFriendIds(ids)
                 const flat = tags.flatMap(cat => cat.tags || cat.Tags || [])
                 setAllTags(flat)
-                // Загружаем pending из localStorage и синхронизируем с сервером
                 const pending = await getPendingRequestIds()
                 setPendingIds(pending)
             } catch (err) {
@@ -60,31 +62,67 @@ export default function Search() {
         init()
     }, [])
 
-    // Infinite scroll через IntersectionObserver
+    const loadMore = useCallback(async () => {
+        if (loadingMore || !hasMore || searchLoading) return
+
+        setLoadingMore(true)
+
+        try {
+            const ids = Object.keys(activeFilters).filter(k => activeFilters[k]).map(Number)
+            const nextSkip = skip + SEARCH_LIMIT
+
+            const results = await searchByUserTags(ids, {
+                offset: nextSkip,
+                limit: SEARCH_LIMIT
+            })
+
+            if (results.length > 0) {
+                setPeople(prev => {
+                    const existingIds = new Set(prev.map(p => p.userId))
+                    const newUnique = results.filter(r => !existingIds.has(r.userId))
+                    return [...prev, ...newUnique]
+                })
+                setSkip(nextSkip)
+                setHasMore(results.length === SEARCH_LIMIT)
+            } else {
+                setHasMore(false)
+            }
+        } catch (err) {
+            console.error('Ошибка загрузки:', err)
+        } finally {
+            setLoadingMore(false)
+        }
+    }, [activeFilters, skip, hasMore, searchLoading, loadingMore])
+
     useEffect(() => {
         if (!loaderRef.current) return
-        const obs = new IntersectionObserver(
-            entries => {
-                if (entries[0].isIntersecting && !loadingMore) {
-                    setLoadingMore(true)
-                    setTimeout(() => {
-                        setLoadingMore(false)
-                    }, 300)
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting && !loadingMore && hasMore && !searchLoading) {
+                    loadMore()
                 }
             },
             { threshold: 0.1 }
         )
-        obs.observe(loaderRef.current)
-        return () => obs.disconnect()
-    }, [loadingMore, people.length])
+
+        observer.observe(loaderRef.current)
+
+        return () => observer.disconnect()
+    }, [loadMore, loadingMore, hasMore, searchLoading])
 
     const handleApply = useCallback(async (checkedTagIds) => {
         setActiveFilters(checkedTagIds)
         setSearchLoading(true)
+        setSkip(0)
+        setHasMore(true)
+
         try {
             const ids = Object.keys(checkedTagIds).filter(k => checkedTagIds[k]).map(Number)
-            const results = await searchByUserTags(ids)
+            const results = await searchByUserTags(ids, { offset: 0, limit: SEARCH_LIMIT })
+
             setPeople(results)
+            setHasMore(results.length === SEARCH_LIMIT)
             toast('Фильтры применены')
         } catch (err) {
             const msg = err.response?.data || 'Ошибка фильтрации'
@@ -254,16 +292,18 @@ export default function Search() {
                                     </motion.div>
                                 ))}
 
-                                {/* Infinite scroll trigger */}
-                                {(
-                                    <div ref={loaderRef} style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+                                {hasMore && (
+                                    <div ref={loaderRef} style={{ padding: '20px 0', display: 'flex', justifyContent: 'center' }}>
                                         {loadingMore && (
                                             <motion.div
                                                 initial={{ opacity: 0 }}
                                                 animate={{ opacity: 1 }}
                                                 style={{
-                                                    display: 'flex', alignItems: 'center', gap: 8,
-                                                    color: 'var(--text-secondary)', fontSize: 13,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 8,
+                                                    color: 'var(--text-secondary)',
+                                                    fontSize: 13,
                                                 }}
                                             >
                                                 <Loader2 size={16} style={{ animation: 'spin 0.7s linear infinite' }} />

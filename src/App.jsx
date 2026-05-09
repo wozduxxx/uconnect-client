@@ -12,6 +12,7 @@ import Chat from './pages/Chat'
 import Wall from './pages/Wall'
 import BgOrbs from './components/BgOrbs'
 import PrivacyPolicy from './pages/PrivacyPolicy'
+import ForgotPassword from "./pages/Forgotpassword.jsx";
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated, isLoading } = useAuth()
@@ -84,12 +85,12 @@ function AppRoutes() {
                     <Route path="/requests" element={
                         <ProtectedRoute><Requests /></ProtectedRoute>
                     } />
-                    <Route path="/wall" element={
-                        <ProtectedRoute><Wall /></ProtectedRoute>
-                    } />
                     <Route path="/chat" element={
                         <ProtectedRoute><Chat /></ProtectedRoute>
                     } />
+
+                    <Route path="/wall" element={<Wall /> } />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="*" element={<Navigate to="/" />} />
                 </Routes>
             </div>
